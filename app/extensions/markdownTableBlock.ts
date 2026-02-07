@@ -1,4 +1,5 @@
 import { Node } from '@tiptap/core'
+import { Plugin } from '@tiptap/pm/state'
 
 export const MarkdownTableBlock = Node.create({
   name: 'markdownTable',
@@ -6,6 +7,8 @@ export const MarkdownTableBlock = Node.create({
   group: 'block',
   content: 'text*',
   marks: '',
+  code: true,
+  whitespace: 'pre',
   isolating: true,
   defining: true,
 
@@ -43,5 +46,39 @@ export const MarkdownTableBlock = Node.create({
   renderMarkdown(node, helpers) {
     const raw = node.content ? helpers.renderChildren(node.content) : ''
     return raw.endsWith('\n') ? raw : `${raw}\n`
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        appendTransaction: (transactions, _oldState, newState) => {
+          if (!transactions.some((tr) => tr.docChanged)) {
+            return null
+          }
+
+          let tr = newState.tr
+          let changed = false
+
+          const emptyNodes: Array<{ from: number, to: number }> = []
+          newState.doc.descendants((node, pos) => {
+            if (node.type.name !== this.name) {
+              return
+            }
+
+            if (node.textContent.trim().length === 0) {
+              emptyNodes.push({ from: pos, to: pos + node.nodeSize })
+            }
+          })
+
+          for (let i = emptyNodes.length - 1; i >= 0; i -= 1) {
+            const range = emptyNodes[i]
+            tr = tr.delete(range.from, range.to)
+            changed = true
+          }
+
+          return changed ? tr : null
+        }
+      })
+    ]
   }
 })
