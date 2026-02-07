@@ -2,6 +2,10 @@
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { TableCell } from '@tiptap/extension-table-cell'
 import { TextSelection } from '@tiptap/pm/state'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { CodeBlockShiki } from '~/extensions/codeBlockShiki'
@@ -236,17 +240,11 @@ function insertCodeBlock() {
 }
 
 function insertTable3x3() {
-  const tableMarkdown = [
-    '',
-    '| Column 1 | Column 2 | Column 3 |',
-    '| --- | --- | --- |',
-    '| Row 1 |  |  |',
-    '| Row 2 |  |  |',
-    '| Row 3 |  |  |',
-    ''
-  ].join('\n')
-
-  editor.value?.chain().focus().insertContent(tableMarkdown).run()
+  editor.value?.chain().focus().insertTable({
+    rows: 3,
+    cols: 3,
+    withHeaderRow: true
+  }).run()
 }
 
 async function bootstrap() {
@@ -274,6 +272,12 @@ async function bootstrap() {
       }),
       RawHtmlText,
       CodeBlockShiki,
+      Table.configure({
+        resizable: false
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
       MermaidBlock
     ],
     editorProps: {

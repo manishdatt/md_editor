@@ -50,10 +50,21 @@ body {
 
 .preview-content :where(ul, ol) {
   padding-left: 1.25rem;
+  list-style-position: outside;
 }
 
 .preview-content :where(li > p) {
   margin: 0;
+}
+
+.preview-content :where(li) {
+  padding-left: 0.1rem;
+}
+
+.preview-content :where(h2, h3) {
+  margin-top: 0.6rem;
+  margin-bottom: 0.35rem;
+  line-height: 1.2;
 }
 
 .preview-content pre {
@@ -66,9 +77,13 @@ body {
 
 .preview-content pre code {
   background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
 }
 
 .preview-content pre.shiki {
   background-color: transparent !important;
+  background: transparent !important;
   box-shadow: none !important;
+  border: 0 !important;
 }
