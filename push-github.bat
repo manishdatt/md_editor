@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 
-set "REPO_URL=git@github.com:bioinfoguru/md_editor.git"
+set "REPO_URL=git@github.com:manishdatt/md_editor.git"
 set "BRANCH=main"
 set "COMMIT_MSG=%*"
 
