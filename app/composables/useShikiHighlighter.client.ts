@@ -4,26 +4,41 @@ const highlighter = shallowRef<any>(null)
 const highlighterPromise = shallowRef<Promise<any> | null>(null)
 
 const languageAliases: Record<string, string> = {
+  c: 'c',
   cjs: 'javascript',
+  cpp: 'cpp',
+  csharp: 'csharp',
+  cs: 'csharp',
   html5: 'html',
   js: 'javascript',
+  jsx: 'javascript',
   mjs: 'javascript',
   md: 'markdown',
+  py: 'python',
+  rb: 'ruby',
+  rs: 'rust',
   shell: 'bash',
   sh: 'bash',
   ts: 'typescript',
+  tsx: 'typescript',
   yml: 'yaml'
 }
 
 const supportedLanguages = new Set([
   'text',
   'plaintext',
+  'c',
+  'cpp',
+  'csharp',
   'bash',
   'css',
   'html',
   'javascript',
   'json',
   'markdown',
+  'python',
+  'ruby',
+  'rust',
   'sql',
   'typescript',
   'vue',
@@ -73,12 +88,10 @@ export function useShikiHighlighter() {
     }
 
     const lang = normalizeLanguage(language || 'text')
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     const html = highlighter.value.codeToHtml(code, {
       lang,
-      themes: {
-        light: 'github-light',
-        dark: 'github-dark'
-      }
+      theme: prefersDark ? 'github-dark' : 'github-light'
     })
 
     return withLanguageClasses(html, lang)

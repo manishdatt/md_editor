@@ -1,47 +1,28 @@
 import CodeBlock from '@tiptap/extension-code-block'
-import { VueNodeViewRenderer } from '@tiptap/vue-3'
-import CodeBlockNodeView from '~/components/editor/CodeBlockNodeView.vue'
 
 export const CodeBlockShiki = CodeBlock.extend({
+  addOptions() {
+    return {
+      ...this.parent?.(),
+      defaultLanguage: 'javascript'
+    }
+  },
+
   addAttributes() {
     return {
       language: {
-        default: 'text',
+        default: this.options.defaultLanguage,
         parseHTML: (element) => {
           const classNames = [...(element.firstElementChild?.classList || [])]
           const language = classNames
             .find((className) => className.startsWith('language-'))
             ?.replace('language-', '')
 
-          return language || 'text'
-        }
-      },
-      code: {
-        default: ''
+          return language || this.options.defaultLanguage
+        },
+        rendered: false
       }
     }
-  },
-
-  content: '',
-  atom: true,
-
-  parseHTML() {
-    return [{ tag: 'pre' }]
-  },
-
-  renderHTML({ node, HTMLAttributes }) {
-    const language = String(node.attrs.language || 'text')
-    const code = String(node.attrs.code || '')
-
-    return [
-      'pre',
-      HTMLAttributes,
-      ['code', { class: `language-${language}` }, code]
-    ]
-  },
-
-  addNodeView() {
-    return VueNodeViewRenderer(CodeBlockNodeView)
   },
 
   parseMarkdown(token, helpers) {
@@ -53,17 +34,18 @@ export const CodeBlockShiki = CodeBlock.extend({
       return []
     }
 
-    return helpers.createNode('codeBlock', {
-      language: token.lang || 'text',
-      code: token.text || ''
-    })
+    return helpers.createNode(
+      'codeBlock',
+      { language: token.lang || this.options.defaultLanguage },
+      token.text ? [helpers.createTextNode(token.text)] : []
+    )
   },
 
-  renderMarkdown(node) {
-    const language = String(node.attrs?.language || 'text')
-    const code = String(node.attrs?.code || '')
-    const suffix = code.endsWith('\n') ? '' : '\n'
+  renderMarkdown(node, h) {
+    const language = String(node.attrs?.language || this.options.defaultLanguage || 'text')
+    const content = node.content ? h.renderChildren(node.content) : ''
+    const suffix = content.endsWith('\n') ? '' : '\n'
 
-    return `\`\`\`${language}\n${code}${suffix}\`\`\``
+    return `\`\`\`${language}\n${content}${suffix}\`\`\``
   }
 })

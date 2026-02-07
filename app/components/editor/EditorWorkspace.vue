@@ -181,13 +181,7 @@ async function exportPdf() {
 }
 
 function insertCodeBlock() {
-  editor.value?.chain().focus().insertContent({
-    type: 'codeBlock',
-    attrs: {
-      language: 'text',
-      code: ''
-    }
-  }).run()
+  editor.value?.chain().focus().setCodeBlock({ language: 'javascript' }).run()
 }
 
 function insertMermaidBlock() {
