@@ -1,0 +1,8 @@
+name = "md-editor"
+compatibility_date = "2025-07-15"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "md_editor"
+database_id = "d4153127-840c-4466-b2aa-d3e88a2e7c90"
