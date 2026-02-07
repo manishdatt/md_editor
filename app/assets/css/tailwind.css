@@ -36,16 +36,24 @@ body {
 }
 
 .preview-content {
-  line-height: 1.35;
+  line-height: 1.25;
 }
 
 .preview-content :where(p, li) {
-  line-height: 1.35;
+  line-height: 1.25;
 }
 
 .preview-content :where(p, ul, ol, pre, blockquote) {
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-top: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.preview-content :where(ul, ol) {
+  padding-left: 1.25rem;
+}
+
+.preview-content :where(li > p) {
+  margin: 0;
 }
 
 .preview-content pre {
@@ -58,4 +66,9 @@ body {
 
 .preview-content pre code {
   background-color: transparent !important;
+}
+
+.preview-content pre.shiki {
+  background-color: transparent !important;
+  box-shadow: none !important;
 }

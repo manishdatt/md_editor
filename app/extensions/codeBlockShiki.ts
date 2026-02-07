@@ -1,4 +1,6 @@
 import CodeBlock from '@tiptap/extension-code-block'
+import { VueNodeViewRenderer } from '@tiptap/vue-3'
+import CodeBlockNodeView from '~/components/editor/CodeBlockNodeView.vue'
 
 export const CodeBlockShiki = CodeBlock.extend({
   addOptions() {
@@ -47,5 +49,9 @@ export const CodeBlockShiki = CodeBlock.extend({
     const suffix = content.endsWith('\n') ? '' : '\n'
 
     return `\`\`\`${language}\n${content}${suffix}\`\`\``
+  },
+
+  addNodeView() {
+    return VueNodeViewRenderer(CodeBlockNodeView)
   }
 })

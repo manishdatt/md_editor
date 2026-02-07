@@ -1,44 +1,36 @@
 <script setup lang="ts">
-import { NodeViewWrapper } from '@tiptap/vue-3'
+import { NodeViewContent, NodeViewWrapper } from '@tiptap/vue-3'
 import { computed } from 'vue'
 
 const props = defineProps<{
-  node: { attrs: { code?: string; language?: string } }
+  node: { attrs: { language?: string } }
   updateAttributes: (attrs: Record<string, unknown>) => void
 }>()
 
-const code = computed(() => String(props.node.attrs.code ?? ''))
 const language = computed(() => String(props.node.attrs.language ?? 'text'))
 
-function onCodeInput(event: Event) {
-  const target = event.target as HTMLTextAreaElement
-  props.updateAttributes({ code: target.value })
+function applyLanguage(value: string) {
+  const nextLanguage = (value || 'text').trim().toLowerCase() || 'text'
+  props.updateAttributes({ language: nextLanguage })
 }
 
 function onLanguageInput(event: Event) {
-  const target = event.target as HTMLInputElement
-  props.updateAttributes({ language: target.value.trim() || 'text' })
+  applyLanguage((event.target as HTMLInputElement).value)
 }
 </script>
 
 <template>
-  <NodeViewWrapper class="my-4 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
-    <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-      <label class="text-xs font-medium uppercase tracking-wide text-neutral-500">Language</label>
+  <NodeViewWrapper class="my-3 rounded-md border border-neutral-300 bg-neutral-900 p-2 dark:border-neutral-700">
+    <div class="mb-2 flex items-center gap-2">
+      <label class="text-[11px] font-medium uppercase tracking-wide text-neutral-300">Lang</label>
       <input
         :value="language"
         type="text"
-        class="w-full rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+        class="w-28 rounded-md border border-neutral-600 bg-neutral-800 px-2 py-1 text-xs text-neutral-100"
         @input="onLanguageInput"
       >
     </div>
 
-    <textarea
-      :value="code"
-      rows="8"
-      spellcheck="false"
-      class="w-full rounded-md border border-neutral-300 bg-neutral-50 p-3 font-mono text-sm dark:border-neutral-700 dark:bg-neutral-950"
-      @input="onCodeInput"
-    />
+    <pre class="m-0 bg-transparent p-0"><code><NodeViewContent as="code" class="block whitespace-pre font-mono text-sm text-neutral-100 caret-white outline-none" /></code></pre>
   </NodeViewWrapper>
 </template>
