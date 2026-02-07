@@ -27,7 +27,7 @@ git add -A || goto :error
 echo Creating commit...
 git commit -m "%COMMIT_MSG%" >nul 2>&1
 if errorlevel 1 (
-  echo No new commit created (possibly no changes).
+  echo No new commit created ^(possibly no changes^).
 )
 
 echo Setting branch to %BRANCH%...
