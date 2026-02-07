@@ -3,6 +3,18 @@ import { shallowRef } from 'vue'
 const highlighter = shallowRef<any>(null)
 const highlighterPromise = shallowRef<Promise<any> | null>(null)
 
+const languageAliases: Record<string, string> = {
+  cjs: 'javascript',
+  html5: 'html',
+  js: 'javascript',
+  mjs: 'javascript',
+  md: 'markdown',
+  shell: 'bash',
+  sh: 'bash',
+  ts: 'typescript',
+  yml: 'yaml'
+}
+
 const supportedLanguages = new Set([
   'text',
   'plaintext',
@@ -47,7 +59,9 @@ async function ensureHighlighter() {
 export function useShikiHighlighter() {
   function normalizeLanguage(language: string) {
     const normalized = language.trim().toLowerCase()
-    return supportedLanguages.has(normalized) ? normalized : 'plaintext'
+    const resolved = languageAliases[normalized] || normalized
+
+    return supportedLanguages.has(resolved) ? resolved : 'plaintext'
   }
 
   function highlightCode(code: string, language: string) {

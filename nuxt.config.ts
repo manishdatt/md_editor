@@ -5,6 +5,13 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'cloudflare_pages'
   },
+  app: {
+    head: {
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/logo_bioinfoguru.svg' }
+      ]
+    }
+  },
   css: ['~/assets/css/tailwind.css'],
   hub: {
     db: 'sqlite'
