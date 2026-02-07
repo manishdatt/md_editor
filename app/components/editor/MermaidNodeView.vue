@@ -28,8 +28,10 @@ async function ensureMermaid() {
   const mermaid = mod.default
   mermaid.initialize({
     startOnLoad: false,
-    theme: 'neutral'
+    theme: 'neutral',
+    suppressErrorRendering: true
   })
+  mermaid.parseError = () => undefined
   mermaidApi.value = mermaid
   return mermaid
 }

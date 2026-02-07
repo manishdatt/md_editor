@@ -8,8 +8,10 @@ async function getMermaid() {
       const mermaid = mod.default
       mermaid.initialize({
         startOnLoad: false,
-        theme: 'neutral'
+        theme: 'neutral',
+        suppressErrorRendering: true
       })
+      mermaid.parseError = () => undefined
       return mermaid
     })
   }

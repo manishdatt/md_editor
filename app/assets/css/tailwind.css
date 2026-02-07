@@ -23,3 +23,39 @@ body {
 .editor-content .ProseMirror-focused {
   @apply caret-neutral-900 dark:caret-neutral-100;
 }
+
+.editor-content .ProseMirror pre {
+  @apply mx-0 bg-neutral-900 text-neutral-100;
+  padding-left: 0.875rem;
+  caret-color: #ffffff;
+}
+
+.editor-content .ProseMirror pre code {
+  color: inherit;
+  caret-color: #ffffff;
+}
+
+.preview-content {
+  line-height: 1.35;
+}
+
+.preview-content :where(p, li) {
+  line-height: 1.35;
+}
+
+.preview-content :where(p, ul, ol, pre, blockquote) {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.preview-content pre {
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0.25rem 0 !important;
+}
+
+.preview-content pre code {
+  background-color: transparent !important;
+}

@@ -216,6 +216,18 @@ function insertMermaidBlock() {
   }).run()
 }
 
+function insertParagraphBlock() {
+  const didCreateNear = editor.value?.chain().focus().createParagraphNear().run()
+  if (didCreateNear) {
+    return
+  }
+
+  editor.value?.chain().focus().insertContent({
+    type: 'paragraph',
+    content: [{ type: 'text', text: '' }]
+  }).run()
+}
+
 async function bootstrap() {
   await listDocuments()
 
@@ -348,6 +360,13 @@ watch(currentDocId, async (id, previousId) => {
           >
             Mermaid
           </button>
+          <button
+            type="button"
+            class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
+            @click="insertParagraphBlock"
+          >
+            Text Line
+          </button>
         </div>
 
         <ClientOnly>
@@ -362,7 +381,7 @@ watch(currentDocId, async (id, previousId) => {
       <section class="min-h-0 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
         <div
           ref="previewRef"
-          class="prose prose-neutral max-w-none overflow-y-auto rounded-md border border-neutral-200 p-3 dark:prose-invert dark:border-neutral-700"
+          class="preview-content prose prose-neutral max-w-none overflow-y-auto rounded-md border border-neutral-200 p-3 dark:prose-invert dark:border-neutral-700"
           v-html="previewHtml"
         />
       </section>
