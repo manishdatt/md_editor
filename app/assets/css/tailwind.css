@@ -48,7 +48,12 @@ body {
   margin-bottom: 0.35rem;
 }
 
-.preview-content :where(ul, ol) {
+.preview-content :where(ul) {
+  list-style: none !important;
+  padding-left: 0 !important;
+}
+
+.preview-content :where(ol) {
   padding-left: 1.4rem;
   list-style-position: outside !important;
 }
@@ -62,8 +67,17 @@ body {
   margin-left: 0;
 }
 
-.preview-content :where(li)::marker {
-  font-size: 1em;
+.preview-content :where(ul > li) {
+  position: relative;
+  padding-left: 1.1rem;
+}
+
+.preview-content :where(ul > li)::before {
+  content: '\2022';
+  position: absolute;
+  left: 0;
+  top: 0;
+  line-height: 1.25;
 }
 
 .preview-content :where(h2, h3) {

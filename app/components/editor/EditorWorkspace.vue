@@ -2,13 +2,10 @@
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
-import { Table } from '@tiptap/extension-table'
-import { TableRow } from '@tiptap/extension-table-row'
-import { TableHeader } from '@tiptap/extension-table-header'
-import { TableCell } from '@tiptap/extension-table-cell'
 import { TextSelection } from '@tiptap/pm/state'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { CodeBlockShiki } from '~/extensions/codeBlockShiki'
+import { MarkdownTableBlock } from '~/extensions/markdownTableBlock'
 import { MermaidBlock } from '~/extensions/mermaidBlock'
 import { RawHtmlText } from '~/extensions/rawHtmlText'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
@@ -240,10 +237,6 @@ function insertCodeBlock() {
 }
 
 function insertTable3x3() {
-  if (!editor.value) {
-    return
-  }
-
   const snippet = [
     '| Column 1 | Column 2 | Column 3 |',
     '| --- | --- | --- |',
@@ -252,11 +245,9 @@ function insertTable3x3() {
     '| Row 3 |  |  |'
   ].join('\n')
 
-  editor.value.chain().focus().command(({ state, dispatch }) => {
-    const { from, to } = state.selection
-    const tr = state.tr.insertText(snippet, from, to)
-    dispatch?.(tr.scrollIntoView())
-    return true
+  editor.value?.chain().focus().insertContent({
+    type: 'markdownTable',
+    content: [{ type: 'text', text: snippet }]
   }).run()
 }
 
@@ -285,12 +276,7 @@ async function bootstrap() {
       }),
       RawHtmlText,
       CodeBlockShiki,
-      Table.configure({
-        resizable: false
-      }),
-      TableRow,
-      TableHeader,
-      TableCell,
+      MarkdownTableBlock,
       MermaidBlock
     ],
     editorProps: {
