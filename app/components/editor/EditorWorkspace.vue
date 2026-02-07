@@ -4,6 +4,8 @@ import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
 import { TextSelection } from '@tiptap/pm/state'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { useAuth } from '@clerk/nuxt/composables'
+import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nuxt/components'
 import { CodeBlockShiki } from '~/extensions/codeBlockShiki'
 import { MarkdownTableBlock } from '~/extensions/markdownTableBlock'
 import { MermaidBlock } from '~/extensions/mermaidBlock'
@@ -17,6 +19,9 @@ type DocItem = {
   updated_at: number
 }
 
+type UserTier = 'free' | 'paid'
+type AppMode = 'public' | UserTier
+
 const editor = shallowRef<Editor | null>(null)
 
 const docs = ref<DocItem[]>([])
@@ -25,27 +30,55 @@ const title = ref('Untitled Document')
 const markdown = ref('')
 const previewHtml = ref('')
 const previewRef = ref<HTMLElement | null>(null)
+const uploadInputRef = ref<HTMLInputElement | null>(null)
 
 const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
+const freeTierMessage = ref('')
+const userTier = ref<UserTier>('free')
 
 const saveTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const pendingMarkdown = ref<string | null>(null)
 let activeSave: Promise<void> | null = null
+let activeModeKey = ''
+
+const { isLoaded, isSignedIn, userId } = useAuth()
+const { renderToHtml, renderMermaidIn } = useMarkdownRenderer()
 
 const canExportPdf = computed(() => Boolean(previewRef.value))
-
-const { renderToHtml, renderMermaidIn } = useMarkdownRenderer()
+const mode = computed<AppMode>(() => {
+  if (!isLoaded.value || !isSignedIn.value) {
+    return 'public'
+  }
+  return userTier.value
+})
+const isPublicMode = computed(() => mode.value === 'public')
+const isAuthenticatedMode = computed(() => !isPublicMode.value)
+const canCreateDocument = computed(() => {
+  if (isPublicMode.value) {
+    return true
+  }
+  return !(userTier.value === 'free' && docs.value.length >= 3)
+})
 
 function makeId() {
   return crypto.randomUUID()
 }
 
 async function listDocuments() {
-  const response = await $fetch<{ documents: DocItem[] }>('/api/documents')
+  if (isPublicMode.value) {
+    return
+  }
+
+  const response = await $fetch<{ documents: DocItem[], user: { id: string, tier: UserTier } }>('/api/documents')
   docs.value = response.documents
+  userTier.value = response.user.tier
 }
 
 async function loadDocument(id: string) {
+  if (isPublicMode.value) {
+    return
+  }
+
   const response = await $fetch<{ document: DocItem }>('/api/documents/' + id)
   currentDocId.value = response.document.id
   title.value = response.document.title
@@ -61,7 +94,7 @@ async function loadDocument(id: string) {
 }
 
 async function saveDocument(content: string) {
-  if (!currentDocId.value) {
+  if (isPublicMode.value || !currentDocId.value) {
     return
   }
 
@@ -80,6 +113,10 @@ async function saveDocument(content: string) {
 }
 
 function scheduleSave(content: string) {
+  if (isPublicMode.value || !currentDocId.value) {
+    return
+  }
+
   pendingMarkdown.value = content
 
   if (saveTimer.value) {
@@ -92,7 +129,7 @@ function scheduleSave(content: string) {
 }
 
 async function flushSaveQueue() {
-  if (activeSave) {
+  if (isPublicMode.value || activeSave) {
     return
   }
 
@@ -105,7 +142,10 @@ async function flushSaveQueue() {
     }
 
     activeSave = saveDocument(nextContent)
-      .catch(() => {
+      .catch((error: any) => {
+        if (error?.data?.code === 'FREE_TIER_LIMIT_REACHED' || error?.statusMessage === 'Free tier limit reached') {
+          freeTierMessage.value = 'Free tier limit reached'
+        }
         saveState.value = 'error'
       })
       .finally(() => {
@@ -125,7 +165,7 @@ async function refreshPreview() {
   }
 }
 
-async function createDocument() {
+async function createDocumentAuthenticated() {
   const id = makeId()
   const now = Date.now()
   const doc: DocItem = {
@@ -135,16 +175,49 @@ async function createDocument() {
     updated_at: now
   }
 
-  await $fetch('/api/documents/' + id, {
-    method: 'PUT',
-    body: {
-      title: doc.title,
-      content: doc.content
+  try {
+    await $fetch('/api/documents/' + id, {
+      method: 'PUT',
+      body: {
+        title: doc.title,
+        content: doc.content
+      }
+    })
+  } catch (error: any) {
+    if (error?.data?.code === 'FREE_TIER_LIMIT_REACHED' || error?.statusMessage === 'Free tier limit reached') {
+      freeTierMessage.value = 'Free tier limit reached'
+      return
     }
-  })
+    throw error
+  }
 
   await listDocuments()
   await loadDocument(id)
+}
+
+async function createLocalDocument() {
+  docs.value = []
+  currentDocId.value = ''
+  title.value = 'Untitled Document'
+  markdown.value = ''
+  saveState.value = 'idle'
+  freeTierMessage.value = ''
+  pendingMarkdown.value = null
+
+  if (editor.value) {
+    editor.value.commands.setContent('', { contentType: 'markdown' })
+  }
+
+  await refreshPreview()
+}
+
+async function createDocument() {
+  if (isPublicMode.value) {
+    await createLocalDocument()
+    return
+  }
+
+  await createDocumentAuthenticated()
 }
 
 async function exportPdf() {
@@ -251,15 +324,58 @@ function insertTable3x3() {
   }).run()
 }
 
-async function bootstrap() {
-  await listDocuments()
-
-  if (docs.value.length === 0) {
-    await createDocument()
-  } else {
-    await loadDocument(docs.value[0].id)
+function triggerMarkdownUpload() {
+  if (isPublicMode.value) {
+    return
   }
 
+  uploadInputRef.value?.click()
+}
+
+async function onMarkdownFileSelected(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+
+  if (!file) {
+    return
+  }
+
+  const content = await file.text()
+  markdown.value = content
+
+  if (editor.value) {
+    editor.value.commands.setContent(content, { contentType: 'markdown' })
+  }
+
+  if (isAuthenticatedMode.value && currentDocId.value) {
+    scheduleSave(content)
+  }
+  await refreshPreview()
+
+  if (input) {
+    input.value = ''
+  }
+}
+
+function downloadMarkdown() {
+  if (!import.meta.client || isPublicMode.value) {
+    return
+  }
+
+  const blob = new Blob([markdown.value], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  const safeName = (title.value || 'document').trim().replace(/[\\/:*?"<>|]+/g, '_')
+
+  anchor.href = url
+  anchor.download = `${safeName || 'document'}.md`
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
+
+function initializeEditor() {
   editor.value = new Editor({
     contentType: 'markdown',
     content: markdown.value,
@@ -284,14 +400,83 @@ async function bootstrap() {
     },
     onUpdate: ({ editor: current }) => {
       markdown.value = current.getMarkdown()
-      scheduleSave(markdown.value)
+      if (isAuthenticatedMode.value) {
+        scheduleSave(markdown.value)
+      } else {
+        saveState.value = 'idle'
+      }
       void refreshPreview()
     }
   })
 }
 
+async function initializePublicMode() {
+  docs.value = []
+  currentDocId.value = ''
+  title.value = 'Untitled Document'
+  markdown.value = ''
+  saveState.value = 'idle'
+  freeTierMessage.value = ''
+  userTier.value = 'free'
+  pendingMarkdown.value = null
+
+  if (saveTimer.value) {
+    clearTimeout(saveTimer.value)
+    saveTimer.value = null
+  }
+
+  if (editor.value) {
+    editor.value.commands.setContent('', { contentType: 'markdown' })
+  }
+
+  await refreshPreview()
+}
+
+async function initializeAuthenticatedMode() {
+  freeTierMessage.value = ''
+  saveState.value = 'idle'
+  pendingMarkdown.value = null
+
+  await listDocuments()
+
+  if (docs.value.length === 0) {
+    await createDocumentAuthenticated()
+    return
+  }
+
+  await loadDocument(docs.value[0].id)
+}
+
+async function syncModeState() {
+  if (!isLoaded.value) {
+    return
+  }
+
+  const nextModeKey = isSignedIn.value ? `auth:${userId.value || 'unknown'}` : 'public'
+  if (nextModeKey === activeModeKey) {
+    return
+  }
+
+  const previousModeKey = activeModeKey
+  activeModeKey = nextModeKey
+
+  if (!isSignedIn.value) {
+    if (previousModeKey.startsWith('auth:')) {
+      await initializePublicMode()
+    } else {
+      saveState.value = 'idle'
+      freeTierMessage.value = ''
+      userTier.value = 'free'
+    }
+    return
+  }
+
+  await initializeAuthenticatedMode()
+}
+
 onMounted(async () => {
-  await bootstrap()
+  initializeEditor()
+  await syncModeState()
 })
 
 onBeforeUnmount(() => {
@@ -303,55 +488,123 @@ onBeforeUnmount(() => {
 })
 
 watch(currentDocId, async (id, previousId) => {
-  if (!id || id === previousId) {
+  if (!id || id === previousId || isPublicMode.value) {
     return
   }
 
   await loadDocument(id)
 })
+
+watch([isLoaded, isSignedIn, userId], async () => {
+  await syncModeState()
+})
 </script>
 
 <template>
   <div class="flex min-h-[calc(100vh-1.5rem)] flex-col gap-3">
-    <header class="flex flex-col gap-2 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900 sm:flex-row sm:items-center">
-      <select
-        v-model="currentDocId"
-        class="rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
-      >
-        <option v-for="doc in docs" :key="doc.id" :value="doc.id">
-          {{ doc.title || 'Untitled Document' }}
-        </option>
-      </select>
+    <header class="flex flex-col gap-2 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
+      <div class="flex flex-wrap items-center gap-2">
+        <span
+          class="rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs font-medium dark:border-neutral-700 dark:bg-neutral-950"
+        >
+          <template v-if="mode === 'public'">Public</template>
+          <template v-else-if="mode === 'free'">Free</template>
+          <template v-else>Paid</template>
+        </span>
 
-      <input
-        v-model="title"
-        type="text"
-        class="w-full rounded-md border border-neutral-300 bg-neutral-50 px-3 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
-      >
+        <SignedOut>
+          <span class="text-xs text-neutral-600 dark:text-neutral-300">Not signed in</span>
+          <span class="text-xs text-amber-700 dark:text-amber-300">Changes will not be saved</span>
+          <SignInButton mode="modal">
+            <button
+              type="button"
+              class="rounded-md border border-neutral-300 px-3 py-1 text-sm dark:border-neutral-700"
+            >
+              Sign In
+            </button>
+          </SignInButton>
+        </SignedOut>
 
-      <button
-        type="button"
-        class="rounded-md border border-neutral-300 px-3 py-1 text-sm dark:border-neutral-700"
-        @click="createDocument"
-      >
-        New
-      </button>
+        <SignedIn>
+          <UserButton />
+        </SignedIn>
+      </div>
 
-      <button
-        type="button"
-        class="rounded-md border border-neutral-300 px-3 py-1 text-sm dark:border-neutral-700"
-        :disabled="!canExportPdf"
-        @click="exportPdf"
-      >
-        PDF
-      </button>
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <select
+          v-if="isAuthenticatedMode"
+          v-model="currentDocId"
+          class="rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+        >
+          <option v-for="doc in docs" :key="doc.id" :value="doc.id">
+            {{ doc.title || 'Untitled Document' }}
+          </option>
+        </select>
 
-      <span class="text-xs text-neutral-500">{{ saveState }}</span>
+        <input
+          v-model="title"
+          type="text"
+          class="w-full rounded-md border border-neutral-300 bg-neutral-50 px-3 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+        >
+
+        <button
+          type="button"
+          class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
+          :disabled="!canCreateDocument"
+          @click="createDocument"
+        >
+          New
+        </button>
+
+        <button
+          type="button"
+          class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
+          :disabled="!canExportPdf"
+          @click="exportPdf"
+        >
+          PDF
+        </button>
+
+        <button
+          type="button"
+          class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
+          :disabled="isPublicMode"
+          @click="triggerMarkdownUpload"
+        >
+          Upload .md
+        </button>
+
+        <button
+          type="button"
+          class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
+          :disabled="isPublicMode"
+          @click="downloadMarkdown"
+        >
+          Download .md
+        </button>
+
+        <input
+          ref="uploadInputRef"
+          type="file"
+          accept=".md,text/markdown"
+          class="hidden"
+          @change="onMarkdownFileSelected"
+        >
+
+        <span class="text-xs text-neutral-500">{{ saveState }}</span>
+      </div>
+
+      <div
+        v-if="freeTierMessage"
+        class="text-xs text-amber-700 dark:text-amber-300"
+      >
+        {{ freeTierMessage }}
+      </div>
     </header>
 
     <div class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
       <section class="min-h-0 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
-        <div class="mb-2 flex gap-2">
+        <div class="mb-2 flex flex-wrap gap-2">
           <button
             type="button"
             class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
