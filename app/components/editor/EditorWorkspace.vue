@@ -5,7 +5,6 @@ import StarterKit from '@tiptap/starter-kit'
 import { TextSelection } from '@tiptap/pm/state'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useAuth } from '@clerk/nuxt/composables'
-import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nuxt/components'
 import { CodeBlockShiki } from '~/extensions/codeBlockShiki'
 import { MarkdownTableBlock } from '~/extensions/markdownTableBlock'
 import { MermaidBlock } from '~/extensions/mermaidBlock'
@@ -511,23 +510,12 @@ watch([isLoaded, isSignedIn, userId], async () => {
           <template v-else-if="mode === 'free'">Free</template>
           <template v-else>Paid</template>
         </span>
-
-        <SignedOut>
-          <span class="text-xs text-neutral-600 dark:text-neutral-300">Not signed in</span>
-          <span class="text-xs text-amber-700 dark:text-amber-300">Changes will not be saved</span>
-          <SignInButton mode="modal">
-            <button
-              type="button"
-              class="rounded-md border border-neutral-300 px-3 py-1 text-sm dark:border-neutral-700"
-            >
-              Sign In
-            </button>
-          </SignInButton>
-        </SignedOut>
-
-        <SignedIn>
-          <UserButton />
-        </SignedIn>
+        <span
+          v-if="isPublicMode"
+          class="text-xs text-amber-700 dark:text-amber-300"
+        >
+          Changes will not be saved
+        </span>
       </div>
 
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
