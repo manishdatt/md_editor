@@ -49,8 +49,8 @@ body {
 }
 
 .preview-content :where(ul, ol) {
-  padding-left: 1.25rem;
-  list-style-position: outside;
+  padding-left: 1.4rem;
+  list-style-position: outside !important;
 }
 
 .preview-content :where(li > p) {
@@ -58,7 +58,12 @@ body {
 }
 
 .preview-content :where(li) {
-  padding-left: 0.1rem;
+  padding-left: 0;
+  margin-left: 0;
+}
+
+.preview-content :where(li)::marker {
+  font-size: 1em;
 }
 
 .preview-content :where(h2, h3) {

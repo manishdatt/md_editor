@@ -240,10 +240,23 @@ function insertCodeBlock() {
 }
 
 function insertTable3x3() {
-  editor.value?.chain().focus().insertTable({
-    rows: 3,
-    cols: 3,
-    withHeaderRow: true
+  if (!editor.value) {
+    return
+  }
+
+  const snippet = [
+    '| Column 1 | Column 2 | Column 3 |',
+    '| --- | --- | --- |',
+    '| Row 1 |  |  |',
+    '| Row 2 |  |  |',
+    '| Row 3 |  |  |'
+  ].join('\n')
+
+  editor.value.chain().focus().command(({ state, dispatch }) => {
+    const { from, to } = state.selection
+    const tr = state.tr.insertText(snippet, from, to)
+    dispatch?.(tr.scrollIntoView())
+    return true
   }).run()
 }
 
