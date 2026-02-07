@@ -65,9 +65,9 @@ export function useMarkdownRenderer() {
     const mermaid = await getMermaid()
     await Promise.all(mermaidNodes.map(async (node, index) => {
       const source = node.textContent?.trim() || ''
-      node.innerHTML = ''
 
       if (!source) {
+        node.innerHTML = ''
         return
       }
 
@@ -75,7 +75,7 @@ export function useMarkdownRenderer() {
         const { svg } = await mermaid.render(`mermaid-preview-${index}-${Date.now()}`, source)
         node.innerHTML = svg
       } catch {
-        node.textContent = 'Mermaid render error'
+        // Keep Mermaid source text when syntax is incomplete/invalid.
       }
     }))
   }

@@ -23,6 +23,7 @@ const title = ref('Untitled Document')
 const markdown = ref('')
 const previewHtml = ref('')
 const previewRef = ref<HTMLElement | null>(null)
+const codeLanguage = ref('javascript')
 
 const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
@@ -181,7 +182,29 @@ async function exportPdf() {
 }
 
 function insertCodeBlock() {
-  editor.value?.chain().focus().setCodeBlock({ language: 'javascript' }).run()
+  const language = (codeLanguage.value || 'text').trim().toLowerCase() || 'text'
+  codeLanguage.value = language
+  editor.value?.chain().focus().setCodeBlock({ language }).run()
+}
+
+function applyCodeLanguage() {
+  const language = (codeLanguage.value || 'text').trim().toLowerCase() || 'text'
+  codeLanguage.value = language
+
+  if (!editor.value?.isActive('codeBlock')) {
+    return
+  }
+
+  editor.value.chain().focus().updateAttributes('codeBlock', { language }).run()
+}
+
+function syncCodeLanguageFromSelection(current: Editor) {
+  if (!current.isActive('codeBlock')) {
+    return
+  }
+
+  const activeLanguage = String(current.getAttributes('codeBlock')?.language || 'text')
+  codeLanguage.value = activeLanguage
 }
 
 function insertMermaidBlock() {
@@ -227,6 +250,9 @@ async function bootstrap() {
       markdown.value = current.getMarkdown()
       scheduleSave(markdown.value)
       void refreshPreview()
+    },
+    onSelectionUpdate: ({ editor: current }) => {
+      syncCodeLanguageFromSelection(current)
     }
   })
 }
@@ -293,6 +319,21 @@ watch(currentDocId, async (id, previousId) => {
     <div class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
       <section class="min-h-0 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
         <div class="mb-2 flex gap-2">
+          <input
+            v-model="codeLanguage"
+            type="text"
+            placeholder="language"
+            class="w-28 rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-950"
+            @keydown.enter.prevent="applyCodeLanguage"
+            @blur="applyCodeLanguage"
+          >
+          <button
+            type="button"
+            class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
+            @click="applyCodeLanguage"
+          >
+            Apply Lang
+          </button>
           <button
             type="button"
             class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
@@ -313,7 +354,7 @@ watch(currentDocId, async (id, previousId) => {
           <EditorContent
             v-if="editor"
             :editor="editor"
-            class="prose prose-neutral max-w-none overflow-y-auto rounded-md border border-neutral-200 p-3 dark:prose-invert dark:border-neutral-700"
+            class="editor-content prose prose-neutral max-w-none overflow-y-auto rounded-md border border-neutral-200 p-3 dark:prose-invert dark:border-neutral-700"
           />
         </ClientOnly>
       </section>

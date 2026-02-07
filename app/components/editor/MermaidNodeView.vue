@@ -53,10 +53,10 @@ async function renderSvg() {
     return
   }
 
-  clearSvg()
   const source = codeValue().trim()
 
   if (!source) {
+    clearSvg()
     return
   }
 
@@ -72,9 +72,7 @@ async function renderSvg() {
     }
     svgHost.value.innerHTML = svg
   } catch {
-    if (svgHost.value) {
-      svgHost.value.textContent = 'Mermaid render error'
-    }
+    // Preserve the last valid SVG while users type incomplete Mermaid syntax.
   }
 }
 

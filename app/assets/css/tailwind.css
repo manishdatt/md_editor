@@ -15,3 +15,11 @@ body {
 .dark body {
   @apply bg-neutral-950 text-neutral-100;
 }
+
+.editor-content .ProseMirror {
+  @apply pl-1 outline-none;
+}
+
+.editor-content .ProseMirror-focused {
+  @apply caret-neutral-900 dark:caret-neutral-100;
+}
