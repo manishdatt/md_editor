@@ -619,7 +619,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
             class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
             @click="insertTable3x3"
           >
-            Table 3x3
+            Table
           </button>
         </div>
 
