@@ -227,13 +227,12 @@ async function exportPdf() {
 
   const exportHost = document.createElement('div')
   exportHost.className = 'preview-content prose prose-neutral max-w-none bg-white p-3 text-neutral-900'
-  exportHost.style.position = 'fixed'
-  exportHost.style.left = '0'
+  exportHost.style.position = 'absolute'
+  exportHost.style.left = '-9999px'
   exportHost.style.top = '0'
   exportHost.style.width = `${Math.max(previewRef.value.clientWidth || 0, 794)}px`
-  exportHost.style.opacity = '0'
-  exportHost.style.pointerEvents = 'none'
-  exportHost.style.zIndex = '-1'
+  exportHost.style.zIndex = '0'
+  exportHost.style.visibility = 'visible'
   exportHost.innerHTML = await renderToHtml(markdown.value, { themeMode: 'light' })
   document.body.appendChild(exportHost)
 
@@ -531,26 +530,29 @@ watch([isLoaded, isSignedIn, userId], async () => {
 <template>
   <div class="flex min-h-[calc(100vh-1.5rem)] flex-col gap-3">
     <header class="flex flex-col gap-2 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
-      <div class="flex flex-wrap items-center gap-2">
-        <span
-          class="rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs font-medium dark:border-neutral-700 dark:bg-neutral-950"
-        >
-          <template v-if="mode === 'public'">Public</template>
-          <template v-else-if="mode === 'free'">Free</template>
-          <template v-else>Paid</template>
-        </span>
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <span
+            class="rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs font-medium dark:border-neutral-700 dark:bg-neutral-950"
+          >
+            <template v-if="mode === 'public'">Public</template>
+            <template v-else-if="mode === 'free'">Free</template>
+            <template v-else>Paid</template>
+          </span>
+          <span
+            v-if="isPublicMode"
+            class="text-xs text-amber-700 dark:text-amber-300"
+          >
+            Changes will not be saved
+          </span>
+        </div>
+
         <NuxtLink
           to="/guide"
           class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
         >
           Guide
         </NuxtLink>
-        <span
-          v-if="isPublicMode"
-          class="text-xs text-amber-700 dark:text-amber-300"
-        >
-          Changes will not be saved
-        </span>
       </div>
 
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
