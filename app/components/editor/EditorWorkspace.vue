@@ -21,13 +21,8 @@ type DocItem = {
 type UserTier = 'free' | 'paid'
 type AppMode = 'public' | UserTier
 
-const publicDraftState: {
-  title: string
-  markdown: string
-} = {
-  title: 'Untitled Document',
-  markdown: ''
-}
+const publicDraftTitle = useState<string>('public-draft-title', () => 'Untitled Document')
+const publicDraftMarkdown = useState<string>('public-draft-markdown', () => '')
 
 const editor = shallowRef<Editor | null>(null)
 
@@ -216,8 +211,8 @@ async function createLocalDocument() {
     editor.value.commands.setContent('', { contentType: 'markdown' })
   }
 
-  publicDraftState.title = title.value
-  publicDraftState.markdown = markdown.value
+  publicDraftTitle.value = title.value
+  publicDraftMarkdown.value = markdown.value
 
   await refreshPreview()
 }
@@ -423,15 +418,26 @@ function initializeEditor() {
       MermaidBlock
     ],
     editorProps: {
-      transformPastedHTML: () => ''
+      transformPastedHTML: () => '',
+      handlePaste: (view, event) => {
+        const text = event.clipboardData?.getData('text/plain')
+        if (typeof text !== 'string' || text.length === 0) {
+          return false
+        }
+
+        event.preventDefault()
+        const { from, to } = view.state.selection
+        view.dispatch(view.state.tr.insertText(text, from, to))
+        return true
+      }
     },
     onUpdate: ({ editor: current }) => {
       markdown.value = current.getMarkdown()
       if (isAuthenticatedMode.value) {
         scheduleSave(markdown.value)
       } else {
-        publicDraftState.title = title.value
-        publicDraftState.markdown = markdown.value
+        publicDraftTitle.value = title.value
+        publicDraftMarkdown.value = markdown.value
         saveState.value = 'idle'
       }
       void refreshPreview()
@@ -442,8 +448,8 @@ function initializeEditor() {
 async function initializePublicMode() {
   docs.value = []
   currentDocId.value = ''
-  title.value = publicDraftState.title
-  markdown.value = publicDraftState.markdown
+  title.value = publicDraftTitle.value
+  markdown.value = publicDraftMarkdown.value
   saveState.value = 'idle'
   freeTierMessage.value = ''
   userTier.value = 'free'
@@ -504,6 +510,8 @@ async function syncModeState() {
 }
 
 onMounted(async () => {
+  title.value = publicDraftTitle.value
+  markdown.value = publicDraftMarkdown.value
   initializeEditor()
   onThemeChanged = () => {
     void refreshPreview()
@@ -518,8 +526,8 @@ onBeforeUnmount(() => {
   }
 
   if (isPublicMode.value) {
-    publicDraftState.title = title.value
-    publicDraftState.markdown = markdown.value
+    publicDraftTitle.value = title.value
+    publicDraftMarkdown.value = markdown.value
   }
 
   if (onThemeChanged) {
@@ -539,7 +547,7 @@ watch(currentDocId, async (id, previousId) => {
 
 watch(title, (nextTitle) => {
   if (isPublicMode.value) {
-    publicDraftState.title = nextTitle
+    publicDraftTitle.value = nextTitle
   }
 })
 
