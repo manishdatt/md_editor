@@ -2,6 +2,9 @@ name = "md-editor"
 compatibility_date = "2025-07-15"
 pages_build_output_dir = "dist"
 
+[vars]
+NUXT_PUBLIC_SITE_URL = "https://md.apps.bioinfo.guru"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "md_editor"
