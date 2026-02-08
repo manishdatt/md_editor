@@ -228,9 +228,11 @@ async function exportPdf() {
   const exportHost = document.createElement('div')
   exportHost.className = 'preview-content prose prose-neutral max-w-none bg-white p-3 text-neutral-900'
   exportHost.style.position = 'fixed'
-  exportHost.style.left = '-100000px'
+  exportHost.style.left = '0'
   exportHost.style.top = '0'
-  exportHost.style.width = `${previewRef.value.clientWidth || 900}px`
+  exportHost.style.width = `${Math.max(previewRef.value.clientWidth || 0, 794)}px`
+  exportHost.style.opacity = '0'
+  exportHost.style.pointerEvents = 'none'
   exportHost.style.zIndex = '-1'
   exportHost.innerHTML = await renderToHtml(markdown.value, { themeMode: 'light' })
   document.body.appendChild(exportHost)
@@ -537,6 +539,12 @@ watch([isLoaded, isSignedIn, userId], async () => {
           <template v-else-if="mode === 'free'">Free</template>
           <template v-else>Paid</template>
         </span>
+        <NuxtLink
+          to="/guide"
+          class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
+        >
+          Guide
+        </NuxtLink>
         <span
           v-if="isPublicMode"
           class="text-xs text-amber-700 dark:text-amber-300"

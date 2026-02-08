@@ -12,6 +12,15 @@ useSeoMeta({
 <template>
   <section class="mx-auto w-full max-w-4xl rounded-lg border border-neutral-300 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900">
     <article class="prose prose-neutral max-w-none dark:prose-invert">
+      <p>
+        <NuxtLink
+          to="/"
+          class="not-prose inline-flex rounded-md border border-neutral-300 px-3 py-1 text-sm text-neutral-700 no-underline dark:border-neutral-700 dark:text-neutral-200"
+        >
+          Back to Editor
+        </NuxtLink>
+      </p>
+
       <h1>User Guide</h1>
       <p>
         This editor is a Markdown-first workspace. You write Markdown on the left and see rendered output on the right.

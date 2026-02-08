@@ -37,17 +37,9 @@ onMounted(() => {
   <div class="min-h-screen bg-neutral-100 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
     <header class="sticky top-0 z-40 border-b border-neutral-300 bg-white/95 backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95">
       <div class="mx-auto flex w-full max-w-7xl items-center justify-between px-3 py-2 sm:px-6">
-        <div class="flex items-center gap-3">
-          <NuxtLink to="/" class="flex items-center gap-2">
-            <img src="/logo_bioinfoguru.svg" alt="Logo" class="h-7 w-7">
-          </NuxtLink>
-          <NuxtLink
-            to="/guide"
-            class="rounded-md border border-neutral-300 px-3 py-1 text-sm dark:border-neutral-700"
-          >
-            Guide
-          </NuxtLink>
-        </div>
+        <NuxtLink to="/" class="flex items-center gap-2">
+          <img src="/logo_bioinfoguru.svg" alt="Logo" class="h-7 w-7">
+        </NuxtLink>
 
         <div class="flex items-center gap-2">
           <button
