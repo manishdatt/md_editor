@@ -10,9 +10,25 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
+      htmlAttrs: {
+        lang: 'en'
+      },
+      titleTemplate: '%s | Markdown Editor',
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/logo_bioinfoguru.svg' }
+      ],
+      meta: [
+        { name: 'description', content: 'Markdown editor with Mermaid, syntax highlighting, and PDF export.' },
+        { name: 'theme-color', content: '#0a0a0a' },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:site_name', content: 'Markdown Editor' },
+        { name: 'twitter:card', content: 'summary' }
       ]
+    }
+  },
+  runtimeConfig: {
+    public: {
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://md-editor.pages.dev'
     }
   },
   css: ['~/assets/css/tailwind.css'],

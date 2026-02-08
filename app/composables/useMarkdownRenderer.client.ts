@@ -29,7 +29,7 @@ function escapeHtml(value: string) {
 export function useMarkdownRenderer() {
   const { ensureHighlighter, highlightCode, normalizeLanguage } = useShikiHighlighter()
 
-  async function renderToHtml(markdown: string) {
+  async function renderToHtml(markdown: string, options?: { themeMode?: 'auto' | 'light' | 'dark' }) {
     await ensureHighlighter()
 
     const { marked } = await import('marked')
@@ -43,7 +43,7 @@ export function useMarkdownRenderer() {
         return `<div class="mermaid">${escapeHtml(source)}</div>`
       }
 
-      return highlightCode(source, normalizeLanguage(language || 'text'))
+      return highlightCode(source, normalizeLanguage(language || 'text'), options?.themeMode || 'auto')
     }
 
     renderer.html = (token: any) => {

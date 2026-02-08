@@ -47,6 +47,8 @@ const supportedLanguages = new Set([
   'yaml'
 ])
 
+type ThemeMode = 'auto' | 'light' | 'dark'
+
 function withLanguageClasses(html: string, language: string) {
   const langClass = `language-${language}`
   return html
@@ -81,7 +83,7 @@ export function useShikiHighlighter() {
     return supportedLanguages.has(resolved) ? resolved : 'plaintext'
   }
 
-  function highlightCode(code: string, language: string) {
+  function highlightCode(code: string, language: string, themeMode: ThemeMode = 'auto') {
     if (!highlighter.value) {
       return `<pre class="language-${language}"><code class="language-${language}">${code
         .replaceAll('&', '&amp;')
@@ -90,8 +92,11 @@ export function useShikiHighlighter() {
     }
 
     const lang = normalizeLanguage(language || 'text')
-    const prefersDark = document.documentElement.classList.contains('dark')
-      || window.matchMedia('(prefers-color-scheme: dark)').matches
+    const prefersDark = themeMode === 'dark'
+      || (themeMode === 'auto' && (
+        document.documentElement.classList.contains('dark')
+        || window.matchMedia('(prefers-color-scheme: dark)').matches
+      ))
     const html = highlighter.value.codeToHtml(code, {
       lang,
       theme: prefersDark ? 'github-dark' : 'github-light'

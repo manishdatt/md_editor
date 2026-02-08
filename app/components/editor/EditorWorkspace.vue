@@ -225,12 +225,23 @@ async function exportPdf() {
     return
   }
 
+  const exportHost = document.createElement('div')
+  exportHost.className = 'preview-content prose prose-neutral max-w-none bg-white p-3 text-neutral-900'
+  exportHost.style.position = 'fixed'
+  exportHost.style.left = '-100000px'
+  exportHost.style.top = '0'
+  exportHost.style.width = `${previewRef.value.clientWidth || 900}px`
+  exportHost.style.zIndex = '-1'
+  exportHost.innerHTML = await renderToHtml(markdown.value, { themeMode: 'light' })
+  document.body.appendChild(exportHost)
+
+  await renderMermaidIn(exportHost)
   await nextTick()
 
   let attempts = 0
   while (attempts < 40) {
-    const mermaidBlocks = previewRef.value.querySelectorAll('.mermaid').length
-    const mermaidSvgs = previewRef.value.querySelectorAll('.mermaid svg').length
+    const mermaidBlocks = exportHost.querySelectorAll('.mermaid').length
+    const mermaidSvgs = exportHost.querySelectorAll('.mermaid svg').length
 
     if (mermaidBlocks === mermaidSvgs) {
       break
@@ -243,20 +254,23 @@ async function exportPdf() {
 
   const html2pdfModule = await import('html2pdf.js')
   const html2pdf = (html2pdfModule.default || html2pdfModule) as any
-  const isDark = document.documentElement.classList.contains('dark')
 
-  await html2pdf()
-    .set({
-      margin: [12, 12],
-      filename: `${title.value || 'document'}.pdf`,
-      html2canvas: {
-        scale: 2,
-        backgroundColor: isDark ? '#0a0a0a' : '#ffffff'
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    })
-    .from(previewRef.value)
-    .save()
+  try {
+    await html2pdf()
+      .set({
+        margin: [12, 12],
+        filename: `${title.value || 'document'}.pdf`,
+        html2canvas: {
+          scale: 2,
+          backgroundColor: '#ffffff'
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      })
+      .from(exportHost)
+      .save()
+  } finally {
+    exportHost.remove()
+  }
 }
 
 function insertMermaidBlock() {
