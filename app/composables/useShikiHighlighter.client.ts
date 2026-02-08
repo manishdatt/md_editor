@@ -90,7 +90,8 @@ export function useShikiHighlighter() {
     }
 
     const lang = normalizeLanguage(language || 'text')
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const prefersDark = document.documentElement.classList.contains('dark')
+      || window.matchMedia('(prefers-color-scheme: dark)').matches
     const html = highlighter.value.codeToHtml(code, {
       lang,
       theme: prefersDark ? 'github-dark' : 'github-light'

@@ -14,6 +14,7 @@ function applyTheme(nextTheme: Theme) {
   theme.value = nextTheme
   document.documentElement.classList.toggle('dark', nextTheme === 'dark')
   localStorage.setItem('theme', nextTheme)
+  window.dispatchEvent(new Event('theme-changed'))
 }
 
 function toggleTheme() {

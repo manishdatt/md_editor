@@ -39,6 +39,7 @@ const saveTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const pendingMarkdown = ref<string | null>(null)
 let activeSave: Promise<void> | null = null
 let activeModeKey = ''
+let onThemeChanged: (() => void) | null = null
 
 const { isLoaded, isSignedIn, userId } = useAuth()
 const { renderToHtml, renderMermaidIn } = useMarkdownRenderer()
@@ -242,12 +243,16 @@ async function exportPdf() {
 
   const html2pdfModule = await import('html2pdf.js')
   const html2pdf = (html2pdfModule.default || html2pdfModule) as any
+  const isDark = document.documentElement.classList.contains('dark')
 
   await html2pdf()
     .set({
       margin: [12, 12],
       filename: `${title.value || 'document'}.pdf`,
-      html2canvas: { scale: 2 },
+      html2canvas: {
+        scale: 2,
+        backgroundColor: isDark ? '#0a0a0a' : '#ffffff'
+      },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     })
     .from(previewRef.value)
@@ -475,12 +480,20 @@ async function syncModeState() {
 
 onMounted(async () => {
   initializeEditor()
+  onThemeChanged = () => {
+    void refreshPreview()
+  }
+  window.addEventListener('theme-changed', onThemeChanged)
   await syncModeState()
 })
 
 onBeforeUnmount(() => {
   if (saveTimer.value) {
     clearTimeout(saveTimer.value)
+  }
+
+  if (onThemeChanged) {
+    window.removeEventListener('theme-changed', onThemeChanged)
   }
 
   editor.value?.destroy()
