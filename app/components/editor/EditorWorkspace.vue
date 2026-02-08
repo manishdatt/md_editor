@@ -21,6 +21,14 @@ type DocItem = {
 type UserTier = 'free' | 'paid'
 type AppMode = 'public' | UserTier
 
+const publicDraftState: {
+  title: string
+  markdown: string
+} = {
+  title: 'Untitled Document',
+  markdown: ''
+}
+
 const editor = shallowRef<Editor | null>(null)
 
 const docs = ref<DocItem[]>([])
@@ -207,6 +215,9 @@ async function createLocalDocument() {
   if (editor.value) {
     editor.value.commands.setContent('', { contentType: 'markdown' })
   }
+
+  publicDraftState.title = title.value
+  publicDraftState.markdown = markdown.value
 
   await refreshPreview()
 }
@@ -419,6 +430,8 @@ function initializeEditor() {
       if (isAuthenticatedMode.value) {
         scheduleSave(markdown.value)
       } else {
+        publicDraftState.title = title.value
+        publicDraftState.markdown = markdown.value
         saveState.value = 'idle'
       }
       void refreshPreview()
@@ -429,8 +442,8 @@ function initializeEditor() {
 async function initializePublicMode() {
   docs.value = []
   currentDocId.value = ''
-  title.value = 'Untitled Document'
-  markdown.value = ''
+  title.value = publicDraftState.title
+  markdown.value = publicDraftState.markdown
   saveState.value = 'idle'
   freeTierMessage.value = ''
   userTier.value = 'free'
@@ -442,7 +455,7 @@ async function initializePublicMode() {
   }
 
   if (editor.value) {
-    editor.value.commands.setContent('', { contentType: 'markdown' })
+    editor.value.commands.setContent(markdown.value, { contentType: 'markdown' })
   }
 
   await refreshPreview()
@@ -504,6 +517,11 @@ onBeforeUnmount(() => {
     clearTimeout(saveTimer.value)
   }
 
+  if (isPublicMode.value) {
+    publicDraftState.title = title.value
+    publicDraftState.markdown = markdown.value
+  }
+
   if (onThemeChanged) {
     window.removeEventListener('theme-changed', onThemeChanged)
   }
@@ -517,6 +535,12 @@ watch(currentDocId, async (id, previousId) => {
   }
 
   await loadDocument(id)
+})
+
+watch(title, (nextTitle) => {
+  if (isPublicMode.value) {
+    publicDraftState.title = nextTitle
+  }
 })
 
 watch([isLoaded, isSignedIn, userId], async () => {
