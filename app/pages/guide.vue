@@ -88,9 +88,9 @@ graph TD
       <p>These shortcodes render in preview and PDF output.</p>
 
       <h2>Detailed documentation</h2>
-      <p>For more detailed documentation on Markdown syntax, see the <a href="https://www.markdownguide.org/basic-syntax" target="_blank" rel="noopener">Markdown Basic Syntax Guide</a>.</p>
-      <p>For a comprehensive reference on all advanced Markdown features, see the <a href="https://www.markdownguide.org/extended-syntax" target="_blank" rel="noopener">Markdown Extended Syntax Guide</a>.</p>
-      
+      <p>For more detailed documentation on Markdown syntax, see the <a href="https://www.markdownguide.org/basic-syntax" target="_blank" rel="noopener">Basic Syntax Guide</a>
+      and <a href="https://www.markdownguide.org/extended-syntax" target="_blank" rel="noopener">Extended Syntax Guide</a>.</p>
+
       <h2>Modes</h2>
       <ul>
         <li><strong>Public:</strong> editable but not saved.</li>
