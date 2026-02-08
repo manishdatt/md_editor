@@ -225,38 +225,31 @@ async function exportPdf() {
     return
   }
 
-  const exportHost = document.createElement('div')
-  exportHost.className = 'preview-content prose prose-neutral max-w-none bg-white p-3 text-neutral-900'
-  exportHost.style.position = 'absolute'
-  exportHost.style.left = '-9999px'
-  exportHost.style.top = '0'
-  exportHost.style.width = `${Math.max(previewRef.value.clientWidth || 0, 794)}px`
-  exportHost.style.zIndex = '0'
-  exportHost.style.visibility = 'visible'
-  exportHost.innerHTML = await renderToHtml(markdown.value, { themeMode: 'light' })
-  document.body.appendChild(exportHost)
-
-  await renderMermaidIn(exportHost)
-  await nextTick()
-
-  let attempts = 0
-  while (attempts < 40) {
-    const mermaidBlocks = exportHost.querySelectorAll('.mermaid').length
-    const mermaidSvgs = exportHost.querySelectorAll('.mermaid svg').length
-
-    if (mermaidBlocks === mermaidSvgs) {
-      break
-    }
-
-    attempts += 1
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    await nextTick()
-  }
-
   const html2pdfModule = await import('html2pdf.js')
   const html2pdf = (html2pdfModule.default || html2pdfModule) as any
+  const wasDark = document.documentElement.classList.contains('dark')
 
   try {
+    if (wasDark) {
+      document.documentElement.classList.remove('dark')
+      await refreshPreview()
+      await nextTick()
+    }
+
+    let attempts = 0
+    while (attempts < 40) {
+      const mermaidBlocks = previewRef.value.querySelectorAll('.mermaid').length
+      const mermaidSvgs = previewRef.value.querySelectorAll('.mermaid svg').length
+
+      if (mermaidBlocks === mermaidSvgs) {
+        break
+      }
+
+      attempts += 1
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      await nextTick()
+    }
+
     await html2pdf()
       .set({
         margin: [12, 12],
@@ -267,10 +260,14 @@ async function exportPdf() {
         },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       })
-      .from(exportHost)
+      .from(previewRef.value)
       .save()
+
   } finally {
-    exportHost.remove()
+    if (wasDark) {
+      document.documentElement.classList.add('dark')
+      await refreshPreview()
+    }
   }
 }
 
