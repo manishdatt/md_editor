@@ -490,7 +490,7 @@ async function syncModeState() {
   activeModeKey = nextModeKey
 
   if (!isSignedIn.value) {
-    if (previousModeKey.startsWith('auth:')) {
+    if (previousModeKey.startsWith('auth:') || previousModeKey === '') {
       await initializePublicMode()
     } else {
       saveState.value = 'idle'

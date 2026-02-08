@@ -13,7 +13,8 @@ export default defineNuxtConfig({
       htmlAttrs: {
         lang: 'en'
       },
-      titleTemplate: '%s | Markdown Editor',
+      titleTemplate: '%s | bioinfo.guru',
+      title: 'Markdown Editor | bioinfo.guru',
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/logo_bioinfoguru.svg' }
       ],
@@ -28,7 +29,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://md-editor.pages.dev'
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://md.apps.bioinfo.guru'
     }
   },
   css: ['~/assets/css/tailwind.css'],

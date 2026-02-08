@@ -71,6 +71,7 @@ graph TD
   A[Start] --&gt; B[End]
 ```
       </code></pre>
+      <p>For more information, see the <a href="https://mermaid.js.org/intro/" target="_blank" rel="noopener">Mermaid documentation</a>.</p>
 
       <h2>Tables</h2>
       <p>Table syntax:</p>
@@ -80,6 +81,16 @@ graph TD
 | C | D |
       </code></pre>
 
+      <h2>Emoji Shortcodes</h2>
+      <p>Use shortcode syntax to insert emojis in normal Markdown text:</p>
+      <pre><code>:smile: :rocket: :tada: :heart: :white_check_mark: :+1: :-1:
+      </code></pre>
+      <p>These shortcodes render in preview and PDF output.</p>
+
+      <h2>Detailed documentation</h2>
+      <p>For more detailed documentation on Markdown syntax, see the <a href="https://www.markdownguide.org/basic-syntax" target="_blank" rel="noopener">Markdown Basic Syntax Guide</a>.</p>
+      <p>For a comprehensive reference on all advanced Markdown features, see the <a href="https://www.markdownguide.org/extended-syntax" target="_blank" rel="noopener">Markdown Extended Syntax Guide</a>.</p>
+      
       <h2>Modes</h2>
       <ul>
         <li><strong>Public:</strong> editable but not saved.</li>

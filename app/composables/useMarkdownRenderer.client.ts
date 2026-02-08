@@ -2,6 +2,38 @@ import { useShikiHighlighter } from '~/composables/useShikiHighlighter.client'
 
 let mermaidInstancePromise: Promise<any> | null = null
 
+const emojiShortcodes: Record<string, string> = {
+  grinning: '😀',
+  smile: '😄',
+  smiley: '😃',
+  laughing: '😆',
+  wink: '😉',
+  blush: '😊',
+  thinking: '🤔',
+  neutral_face: '😐',
+  expressionless: '😑',
+  crying: '😢',
+  sob: '😭',
+  angry: '😠',
+  thumbsup: '👍',
+  '+1': '👍',
+  thumbsdown: '👎',
+  '-1': '👎',
+  clap: '👏',
+  raised_hands: '🙌',
+  fire: '🔥',
+  sparkles: '✨',
+  tada: '🎉',
+  rocket: '🚀',
+  heart: '❤️',
+  broken_heart: '💔',
+  star: '⭐',
+  white_check_mark: '✅',
+  x: '❌',
+  warning: '⚠️',
+  bulb: '💡'
+}
+
 async function getMermaid() {
   if (!mermaidInstancePromise) {
     mermaidInstancePromise = import('mermaid').then((mod) => {
@@ -24,6 +56,13 @@ function escapeHtml(value: string) {
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
+}
+
+function emojifyText(value: string) {
+  return value.replace(/:([a-z0-9_+-]+):/gi, (full, name: string) => {
+    const key = name.toLowerCase()
+    return emojiShortcodes[key] || full
+  })
 }
 
 export function useMarkdownRenderer() {
@@ -54,7 +93,12 @@ export function useMarkdownRenderer() {
     return String(marked.parse(markdown, {
       gfm: true,
       breaks: false,
-      renderer
+      renderer,
+      walkTokens: (token: any) => {
+        if (token?.type === 'text' && typeof token.text === 'string') {
+          token.text = emojifyText(token.text)
+        }
+      }
     }))
   }
 
