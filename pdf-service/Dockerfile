@@ -14,7 +14,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Pin a specific typst release; bump deliberately, not incidentally.
-ARG TYPST_VERSION=0.13.1
+ARG TYPST_VERSION=0.15.1
 ADD https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz /tmp/typst.tar.xz
 RUN tar -xJf /tmp/typst.tar.xz -C /usr/local/bin --strip-components=1 \
         typst-x86_64-unknown-linux-musl/typst \

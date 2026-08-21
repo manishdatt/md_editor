@@ -4,19 +4,19 @@ steps:
       - 'build'
       - '--build-arg=TYPST_VERSION=${_TYPST_VERSION}'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/pdf-service:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/pdf-service:${_TAG}'
       - '.'
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/pdf-service:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/pdf-service:${_TAG}'
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       - 'run'
       - 'deploy'
       - 'pdf-service'
-      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/pdf-service:${SHORT_SHA}'
+      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/pdf-service:${_TAG}'
       - '--region=${_REGION}'
       - '--set-secrets=PDF_SERVICE_API_KEY=pdf-service-api-key:latest'
       - '--memory=512Mi'
@@ -29,7 +29,8 @@ steps:
 substitutions:
   _REGION: 'europe-west1'
   _REPO_NAME: 'pdf-service'
-  _TYPST_VERSION: '0.13.1'
+  _TYPST_VERSION: '0.15.1'
+  _TAG: 'latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY
