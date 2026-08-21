@@ -1,0 +1,35 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg=TYPST_VERSION=${_TYPST_VERSION}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/pdf-service:${SHORT_SHA}'
+      - '.'
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/pdf-service:${SHORT_SHA}'
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'pdf-service'
+      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/pdf-service:${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--set-secrets=PDF_SERVICE_API_KEY=pdf-service-api-key:latest'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--timeout=60s'
+      - '--concurrency=4'
+      - '--max-instances=5'
+      - '--no-allow-unauthenticated'
+
+substitutions:
+  _REGION: 'europe-west1'
+  _REPO_NAME: 'pdf-service'
+  _TYPST_VERSION: '0.13.1'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

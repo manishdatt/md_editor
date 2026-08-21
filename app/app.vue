@@ -3,7 +3,7 @@ const route = useRoute()
 const runtimeConfig = useRuntimeConfig()
 
 const canonicalUrl = computed(() => {
-  const siteUrl = String(runtimeConfig.public.siteUrl || 'https://md.apps.bioinfo.guru').replace(/\/+$/, '')
+  const siteUrl = String(runtimeConfig.public.siteUrl || 'https://shbd.bioinfo.guru').replace(/\/+$/, '')
   return `${siteUrl}${route.path || '/'}`
 })
 

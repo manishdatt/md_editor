@@ -2,9 +2,9 @@
 useSeoMeta({
   title: 'Guide',
   description: 'User guide for the Markdown editor, including Markdown syntax basics and editor workflow.',
-  ogTitle: 'Markdown Editor Guide',
+  ogTitle: 'shbd Guide',
   ogDescription: 'User guide for the Markdown editor, including Markdown syntax basics and editor workflow.',
-  twitterTitle: 'Markdown Editor Guide',
+  twitterTitle: 'shbd Guide',
   twitterDescription: 'User guide for the Markdown editor, including Markdown syntax basics and editor workflow.'
 })
 </script>
@@ -29,11 +29,38 @@ useSeoMeta({
 
       <h2>Core Workflow</h2>
       <ul>
-        <li>Use <strong>New</strong> to create a document.</li>
+        <li>Use <strong>New</strong> to create a Markdown document, or <strong>New Typst</strong> to create a Typst document.</li>
         <li>Write content in the editor pane.</li>
         <li>Use <strong>PDF</strong> to export your rendered document.</li>
-        <li>Use <strong>Upload .md</strong> and <strong>Download .md</strong> for Markdown files.</li>
+        <li>Use <strong>Upload .md</strong> and <strong>Download .md</strong> for Markdown files (<strong>Download .typ</strong> for Typst documents).</li>
       </ul>
+
+      <h2>Typst Documents</h2>
+      <p>
+        Typst documents are written directly in the
+        <a href="https://typst.app/docs" target="_blank" rel="noopener">Typst markup language</a>
+        and compiled to print-quality PDF when you press <strong>PDF</strong>.
+        The format is chosen when the document is created and cannot be changed later.
+      </p>
+      <pre><code>= Hello Typst
+
+This is a #strong[print-quality] document.
+
+- Real pagination and page numbers
+- Excellent math: $integral_0^1 x^2 dif x = 1/3$
+- Syntax-highlighted code blocks
+
+```rust
+fn main() {
+    println!("Hello from Typst!");
+}
+```
+      </code></pre>
+      <p>
+        Notes: Typst export requires signing in (the document is compiled on our
+        server), compilation errors are shown under the toolbar, and Mermaid diagrams
+        are not available in Typst mode.
+      </p>
 
       <h2>Markdown Basics</h2>
       <p>Common syntax examples:</p>

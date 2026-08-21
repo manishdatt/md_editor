@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm'
 import type { H3Event } from 'h3'
-import { users } from '~~/server/db/schema'
+import { createError } from 'h3'
+import { getAuth } from '~~/server/auth'
+import { user } from '~~/server/db/schema'
 import { useDatabase } from '~~/server/utils/database'
 
 export type UserTier = 'free' | 'paid'
@@ -10,61 +12,22 @@ export type AuthenticatedUser = {
   tier: UserTier
 }
 
-function readAuthenticatedUserId(event: H3Event): string | null {
-  const authContext = (event.context as any).auth
-  if (typeof authContext !== 'function') {
-    return null
-  }
-
-  const auth = authContext()
-  if (!auth?.userId) {
-    return null
-  }
-
-  return auth.userId
-}
-
 export async function requireAuthenticatedUser(event: H3Event): Promise<AuthenticatedUser> {
-  const userId = readAuthenticatedUserId(event)
-  if (!userId) {
+  const auth = await getAuth()
+  const result = await auth.api.getSession({ headers: event.headers })
+  const sessionUser = (result as any)?.user ?? (result as any)?.session?.user
+  if (!sessionUser) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
   const db = await useDatabase()
-  const existing = await db
-    .select({
-      id: users.id,
-      tier: users.tier
-    })
-    .from(users)
-    .where(eq(users.id, userId))
+  const rows = await db
+    .select({ tier: user.tier })
+    .from(user)
+    .where(eq(user.id, sessionUser.id))
     .limit(1)
 
-  if (!existing[0]) {
-    const now = Date.now()
-    await db.insert(users).values({
-      id: userId,
-      tier: 'free',
-      createdAt: now,
-      updatedAt: now
-    })
-    return { id: userId, tier: 'free' }
-  }
+  const tier = (rows[0]?.tier as UserTier) || 'free'
 
-  if (existing[0].tier !== 'free' && existing[0].tier !== 'paid') {
-    const now = Date.now()
-    await db
-      .update(users)
-      .set({
-        tier: 'free',
-        updatedAt: now
-      })
-      .where(eq(users.id, userId))
-    return { id: userId, tier: 'free' }
-  }
-
-  return {
-    id: existing[0].id,
-    tier: existing[0].tier
-  }
+  return { id: sessionUser.id, tier }
 }

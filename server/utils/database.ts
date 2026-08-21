@@ -1,26 +1,109 @@
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { sql } from 'drizzle-orm'
-import { db } from 'hub:db'
+import * as schema from '~~/server/db/schema'
 
+let dbInstance: LibSQLDatabase<typeof schema> | null = null
 let schemaReady: Promise<void> | null = null
 
-export function hubDatabase() {
-  return db
+function getConfig() {
+  const url = process.env.TURSO_URL
+  const authToken = process.env.TURSO_AUTH_TOKEN
+
+  if (!url || !authToken) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'TURSO_URL and TURSO_AUTH_TOKEN must be configured'
+    })
+  }
+
+  return { url, authToken }
 }
 
-async function ensureSchema() {
+export function getDb(): LibSQLDatabase<typeof schema> {
+  if (!dbInstance) {
+    const { url, authToken } = getConfig()
+    const client = createClient({ url, authToken })
+    dbInstance = drizzle(client, { schema })
+  }
+
+  return dbInstance
+}
+
+export async function ensureSchema() {
   if (!schemaReady) {
     schemaReady = (async () => {
-      const database = hubDatabase()
-      await database.run(sql.raw('CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, tier TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)'))
-      await database.run(sql.raw('CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, updated_at INTEGER NOT NULL)'))
+      const database = getDb()
 
-      try {
-        await database.run(sql.raw("ALTER TABLE documents ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''"))
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        if (!message.toLowerCase().includes('duplicate column name')) {
-          throw error
-        }
+      const statements = [
+        `CREATE TABLE IF NOT EXISTS user (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          email_verified INTEGER NOT NULL DEFAULT 0,
+          image TEXT,
+          tier TEXT NOT NULL DEFAULT 'free',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )`,
+        `CREATE TABLE IF NOT EXISTS session (
+          id TEXT PRIMARY KEY,
+          expires_at INTEGER NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          ip_address TEXT,
+          user_agent TEXT,
+          user_id TEXT NOT NULL
+        )`,
+        `CREATE TABLE IF NOT EXISTS account (
+          id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          provider_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          access_token TEXT,
+          refresh_token TEXT,
+          id_token TEXT,
+          access_token_expires_at INTEGER,
+          refresh_token_expires_at INTEGER,
+          scope TEXT,
+          password TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )`,
+        `CREATE TABLE IF NOT EXISTS verification (
+          id TEXT PRIMARY KEY,
+          identifier TEXT NOT NULL,
+          value TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          created_at INTEGER,
+          updated_at INTEGER
+        )`,
+        `CREATE TABLE IF NOT EXISTS documents (
+          id TEXT PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          format TEXT NOT NULL DEFAULT 'markdown',
+          updated_at INTEGER NOT NULL
+        )`
+      ]
+
+      for (const statement of statements) {
+        await database.run(sql.raw(statement))
+      }
+
+      // Idempotent migrations for databases created before a column existed.
+      const documentColumns = await database.all(sql.raw(`PRAGMA table_info(documents)`))
+      const hasFormat = (documentColumns as Array<{ name?: string }>).some(
+        (column) => column.name === 'format'
+      )
+
+      if (!hasFormat) {
+        await database.run(sql.raw(
+          `ALTER TABLE documents ADD COLUMN format TEXT NOT NULL DEFAULT 'markdown'`
+        ))
       }
     })()
   }
@@ -28,7 +111,7 @@ async function ensureSchema() {
   await schemaReady
 }
 
-export async function useDatabase() {
+export async function useDatabase(): Promise<LibSQLDatabase<typeof schema>> {
   await ensureSchema()
-  return hubDatabase()
+  return getDb()
 }

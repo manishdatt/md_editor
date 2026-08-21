@@ -20,6 +20,16 @@ body {
   @apply pl-1 outline-none;
 }
 
+.ai-ghost-text {
+  color: #a3a3a3;
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
+.dark .ai-ghost-text {
+  color: #737373;
+}
+
 .editor-content .ProseMirror-focused {
   @apply caret-neutral-900 dark:caret-neutral-100;
 }

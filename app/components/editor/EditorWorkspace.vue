@@ -4,22 +4,28 @@ import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
 import { TextSelection } from '@tiptap/pm/state'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { useAuth } from '@clerk/nuxt/composables'
 import { CodeBlockShiki } from '~/extensions/codeBlockShiki'
 import { MarkdownTableBlock } from '~/extensions/markdownTableBlock'
 import { MermaidBlock } from '~/extensions/mermaidBlock'
 import { RawHtmlText } from '~/extensions/rawHtmlText'
+import { AiGhostText } from '~/extensions/aiGhostText'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
+import { authClient } from '~/lib/auth-client'
+
+type DocumentFormat = 'markdown' | 'typst'
 
 type DocItem = {
   id: string
   title: string
   content: string
+  format?: DocumentFormat
   updated_at: number
 }
 
 type UserTier = 'free' | 'paid'
 type AppMode = 'public' | UserTier
+
+const TYPST_STARTER = '= Untitled Document\n\nStart writing your Typst document here.\n'
 
 const publicDraftTitle = useState<string>('public-draft-title', () => 'Untitled Document')
 const publicDraftMarkdown = useState<string>('public-draft-markdown', () => '')
@@ -37,6 +43,9 @@ const uploadInputRef = ref<HTMLInputElement | null>(null)
 const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 const freeTierMessage = ref('')
 const userTier = ref<UserTier>('free')
+const docFormat = ref<DocumentFormat>('markdown')
+const exportingPdf = ref(false)
+const typstError = ref('')
 
 const saveTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const pendingMarkdown = ref<string | null>(null)
@@ -44,10 +53,19 @@ let activeSave: Promise<void> | null = null
 let activeModeKey = ''
 let onThemeChanged: (() => void) | null = null
 
-const { isLoaded, isSignedIn, userId } = useAuth()
+const { data: authSession, isPending } = authClient.useSession()
+const isLoaded = computed(() => !isPending.value)
+const isSignedIn = computed(() => Boolean(authSession.value?.user))
+const userId = computed(() => authSession.value?.user?.id ?? '')
 const { renderToHtml, renderMermaidIn } = useMarkdownRenderer()
 
-const canExportPdf = computed(() => Boolean(previewRef.value))
+const canExportPdf = computed(() => {
+  if (docFormat.value === 'typst') {
+    return isAuthenticatedMode.value && Boolean(currentDocId.value)
+  }
+  return Boolean(previewRef.value)
+})
+const aiGhostEnabled = ref(true)
 const mode = computed<AppMode>(() => {
   if (!isLoaded.value || !isSignedIn.value) {
     return 'public'
@@ -85,15 +103,21 @@ async function loadDocument(id: string) {
   const response = await $fetch<{ document: DocItem }>('/api/documents/' + id)
   currentDocId.value = response.document.id
   title.value = response.document.title
+  docFormat.value = response.document.format === 'typst' ? 'typst' : 'markdown'
+  typstError.value = ''
   markdown.value = response.document.content
 
-  if (editor.value) {
+  // Typst source must never pass through the TipTap editor: its markdown
+  // serializer would rewrite (and corrupt) the .typ syntax.
+  if (editor.value && docFormat.value === 'markdown') {
     editor.value.commands.setContent(markdown.value, {
       contentType: 'markdown'
     })
   }
 
-  await refreshPreview()
+  if (docFormat.value === 'markdown') {
+    await refreshPreview()
+  }
 }
 
 async function saveDocument(content: string) {
@@ -168,13 +192,15 @@ async function refreshPreview() {
   }
 }
 
-async function createDocumentAuthenticated() {
+async function createDocumentAuthenticated(format: DocumentFormat = 'markdown') {
   const id = makeId()
   const now = Date.now()
+  const startingContent = format === 'typst' ? TYPST_STARTER : ''
   const doc: DocItem = {
     id,
     title: 'Untitled Document',
-    content: '',
+    content: startingContent,
+    format,
     updated_at: now
   }
 
@@ -183,7 +209,8 @@ async function createDocumentAuthenticated() {
       method: 'PUT',
       body: {
         title: doc.title,
-        content: doc.content
+        content: doc.content,
+        format
       }
     })
   } catch (error: any) {
@@ -194,6 +221,9 @@ async function createDocumentAuthenticated() {
     throw error
   }
 
+  docFormat.value = format
+  markdown.value = startingContent
+
   await listDocuments()
   await loadDocument(id)
 }
@@ -203,6 +233,8 @@ async function createLocalDocument() {
   currentDocId.value = ''
   title.value = 'Untitled Document'
   markdown.value = ''
+  docFormat.value = 'markdown'
+  typstError.value = ''
   saveState.value = 'idle'
   freeTierMessage.value = ''
   pendingMarkdown.value = null
@@ -217,13 +249,13 @@ async function createLocalDocument() {
   await refreshPreview()
 }
 
-async function createDocument() {
+async function createDocument(format: DocumentFormat = 'markdown') {
   if (isPublicMode.value) {
     await createLocalDocument()
     return
   }
 
-  await createDocumentAuthenticated()
+  await createDocumentAuthenticated(format)
 }
 
 async function exportPdf() {
@@ -274,6 +306,65 @@ async function exportPdf() {
       document.documentElement.classList.add('dark')
       await refreshPreview()
     }
+  }
+}
+
+async function exportTypstPdf() {
+  if (!currentDocId.value || exportingPdf.value) {
+    return
+  }
+
+  exportingPdf.value = true
+  typstError.value = ''
+
+  try {
+    await flushSaveQueue()
+
+    const response = await $fetch.raw<Blob>('/api/export/pdf', {
+      method: 'POST',
+      body: { documentId: currentDocId.value },
+      responseType: 'blob'
+    })
+
+    const blob = response._data
+    if (!(blob instanceof Blob)) {
+      throw new Error('Unexpected PDF response')
+    }
+
+    const safeName = (title.value || 'document').trim().replace(/[\\/:*?"<>|]+/g, '_')
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${safeName || 'document'}.pdf`
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    URL.revokeObjectURL(url)
+  } catch (error: any) {
+    const detail = error?.data?.data?.detail ?? error?.data?.detail
+    typstError.value = detail
+      ? `Compilation failed: ${detail}`
+      : (error?.statusMessage || error?.message || 'PDF export failed')
+  } finally {
+    exportingPdf.value = false
+  }
+}
+
+function exportPdfForCurrentDoc() {
+  if (docFormat.value === 'typst') {
+    void exportTypstPdf()
+    return
+  }
+
+  void exportPdf()
+}
+
+function onTypstSourceInput(event: Event) {
+  const value = (event.target as HTMLTextAreaElement).value
+  markdown.value = value
+
+  if (isAuthenticatedMode.value && currentDocId.value) {
+    scheduleSave(value)
   }
 }
 
@@ -347,11 +438,16 @@ function insertTable3x3() {
 }
 
 function triggerMarkdownUpload() {
-  if (isPublicMode.value) {
+  if (isPublicMode.value || docFormat.value === 'typst') {
     return
   }
 
   uploadInputRef.value?.click()
+}
+
+function toggleAiGhost() {
+  aiGhostEnabled.value = !aiGhostEnabled.value
+  editor.value?.commands.setAiGhostTextEnabled(aiGhostEnabled.value)
 }
 
 async function onMarkdownFileSelected(event: Event) {
@@ -364,6 +460,17 @@ async function onMarkdownFileSelected(event: Event) {
 
   const content = await file.text()
   markdown.value = content
+
+  if (docFormat.value === 'typst') {
+    if (isAuthenticatedMode.value && currentDocId.value) {
+      scheduleSave(content)
+    }
+
+    if (input) {
+      input.value = ''
+    }
+    return
+  }
 
   if (editor.value) {
     editor.value.commands.setContent(content, { contentType: 'markdown' })
@@ -379,18 +486,21 @@ async function onMarkdownFileSelected(event: Event) {
   }
 }
 
-function downloadMarkdown() {
+function downloadSource() {
   if (!import.meta.client || isPublicMode.value) {
     return
   }
 
-  const blob = new Blob([markdown.value], { type: 'text/markdown;charset=utf-8' })
+  const isTypst = docFormat.value === 'typst'
+  const blob = new Blob([markdown.value], {
+    type: isTypst ? 'text/plain;charset=utf-8' : 'text/markdown;charset=utf-8'
+  })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   const safeName = (title.value || 'document').trim().replace(/[\\/:*?"<>|]+/g, '_')
 
   anchor.href = url
-  anchor.download = `${safeName || 'document'}.md`
+  anchor.download = `${safeName || 'document'}${isTypst ? '.typ' : '.md'}`
   document.body.appendChild(anchor)
   anchor.click()
   document.body.removeChild(anchor)
@@ -415,7 +525,8 @@ function initializeEditor() {
       RawHtmlText,
       CodeBlockShiki,
       MarkdownTableBlock,
-      MermaidBlock
+      MermaidBlock,
+      AiGhostText
     ],
     editorProps: {
       transformPastedHTML: () => '',
@@ -450,6 +561,8 @@ async function initializePublicMode() {
   currentDocId.value = ''
   title.value = publicDraftTitle.value
   markdown.value = publicDraftMarkdown.value
+  docFormat.value = 'markdown'
+  typstError.value = ''
   saveState.value = 'idle'
   freeTierMessage.value = ''
   userTier.value = 'free'
@@ -513,6 +626,9 @@ onMounted(async () => {
   title.value = publicDraftTitle.value
   markdown.value = publicDraftMarkdown.value
   initializeEditor()
+  if (import.meta.client) {
+    aiGhostEnabled.value = window.localStorage.getItem('ai-ghost-enabled') !== '0'
+  }
   onThemeChanged = () => {
     void refreshPreview()
   }
@@ -605,24 +721,35 @@ watch([isLoaded, isSignedIn, userId], async () => {
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
           :disabled="!canCreateDocument"
-          @click="createDocument"
+          @click="createDocument('markdown')"
         >
           New
         </button>
 
         <button
+          v-if="isAuthenticatedMode"
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
-          :disabled="!canExportPdf"
-          @click="exportPdf"
+          :disabled="!canCreateDocument"
+          title="Create a Typst (.typ) document compiled to PDF on export"
+          @click="createDocument('typst')"
         >
-          PDF
+          New Typst
         </button>
 
         <button
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
-          :disabled="isPublicMode"
+          :disabled="!canExportPdf || exportingPdf"
+          @click="exportPdfForCurrentDoc"
+        >
+          {{ exportingPdf ? 'PDF…' : 'PDF' }}
+        </button>
+
+        <button
+          type="button"
+          class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
+          :disabled="isPublicMode || docFormat === 'typst'"
           @click="triggerMarkdownUpload"
         >
           Upload .md
@@ -632,9 +759,9 @@ watch([isLoaded, isSignedIn, userId], async () => {
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
           :disabled="isPublicMode"
-          @click="downloadMarkdown"
+          @click="downloadSource"
         >
-          Download .md
+          {{ docFormat === 'typst' ? 'Download .typ' : 'Download .md' }}
         </button>
 
         <input
@@ -654,11 +781,24 @@ watch([isLoaded, isSignedIn, userId], async () => {
       >
         {{ freeTierMessage }}
       </div>
+
+      <div
+        v-if="typstError"
+        class="whitespace-pre-wrap text-xs text-red-700 dark:text-red-300"
+      >
+        {{ typstError }}
+      </div>
     </header>
 
-    <div class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
+    <div
+      class="grid min-h-0 flex-1 grid-cols-1 gap-3"
+      :class="docFormat === 'typst' ? '' : 'lg:grid-cols-2'"
+    >
       <section class="min-h-0 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
-        <div class="mb-2 flex flex-wrap gap-2">
+        <div
+          v-if="docFormat === 'markdown'"
+          class="mb-2 flex flex-wrap gap-2"
+        >
           <button
             type="button"
             class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
@@ -687,18 +827,41 @@ watch([isLoaded, isSignedIn, userId], async () => {
           >
             Table
           </button>
+
+          <button
+            type="button"
+            class="rounded-md border px-2 py-1 text-xs"
+            :class="aiGhostEnabled
+              ? 'border-neutral-900 bg-neutral-100 text-neutral-900 dark:border-neutral-100 dark:bg-neutral-800 dark:text-neutral-100'
+              : 'border-neutral-300 text-neutral-500 dark:border-neutral-700'"
+            :title="aiGhostEnabled ? 'AI autocomplete on (Tab to accept, Esc to dismiss)' : 'AI autocomplete off'"
+            @click="toggleAiGhost"
+          >
+            AI
+          </button>
         </div>
 
         <ClientOnly>
           <EditorContent
-            v-if="editor"
+            v-if="editor && docFormat === 'markdown'"
             :editor="editor"
             class="editor-content prose prose-neutral max-w-none overflow-y-auto rounded-md border border-neutral-200 p-3 dark:prose-invert dark:border-neutral-700"
+          />
+          <textarea
+            v-else-if="docFormat === 'typst'"
+            :value="markdown"
+            spellcheck="false"
+            class="min-h-[24rem] w-full resize-y overflow-y-auto rounded-md border border-neutral-200 bg-white p-3 font-mono text-sm leading-relaxed outline-none dark:border-neutral-700 dark:bg-neutral-950"
+            placeholder="= Your Typst document&#10;&#10;Write Typst source here, then press PDF to compile it."
+            @input="onTypstSourceInput"
           />
         </ClientOnly>
       </section>
 
-      <section class="min-h-0 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
+      <section
+        v-if="docFormat === 'markdown'"
+        class="min-h-0 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900"
+      >
         <div
           ref="previewRef"
           class="preview-content prose prose-neutral max-w-none overflow-y-auto p-3 dark:prose-invert"

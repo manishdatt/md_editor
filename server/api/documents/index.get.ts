@@ -11,6 +11,7 @@ export default defineEventHandler(async (event) => {
       id: documents.id,
       title: documents.title,
       content: documents.content,
+      format: documents.format,
       updated_at: documents.updatedAt
     })
     .from(documents)

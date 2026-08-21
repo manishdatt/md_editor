@@ -2,11 +2,11 @@
 import EditorWorkspace from '~/components/editor/EditorWorkspace.vue'
 
 useSeoMeta({
-  title: 'Markdown Editor',
+  title: 'shbd',
   description: 'Write Markdown with Mermaid diagrams, code highlighting, and PDF export.',
-  ogTitle: 'Markdown Editor',
+  ogTitle: 'shbd',
   ogDescription: 'Write Markdown with Mermaid diagrams, code highlighting, and PDF export.',
-  twitterTitle: 'Markdown Editor',
+  twitterTitle: 'shbd',
   twitterDescription: 'Write Markdown with Mermaid diagrams, code highlighting, and PDF export.'
 })
 </script>
