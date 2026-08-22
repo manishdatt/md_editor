@@ -1,5 +1,4 @@
 import { betterAuth } from 'better-auth'
-import { google, github } from 'better-auth/social-providers'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import type { BetterAuth } from 'better-auth'
 import { getRequestURL, type H3Event } from 'h3'
@@ -27,10 +26,10 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
 
   const socialProviders: Record<string, any> = {}
   if (githubId && githubSecret) {
-    socialProviders.github = github({ clientId: githubId, clientSecret: githubSecret })
+    socialProviders.github = { clientId: githubId, clientSecret: githubSecret }
   }
   if (googleId && googleSecret) {
-    socialProviders.google = google({ clientId: googleId, clientSecret: googleSecret })
+    socialProviders.google = { clientId: googleId, clientSecret: googleSecret }
   }
 
   const secret = cfEnv.BETTER_AUTH_SECRET || (config.betterAuthSecret as string) || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
