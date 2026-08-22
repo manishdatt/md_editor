@@ -68,6 +68,7 @@ export async function ensureSchema(event?: H3Event) {
           )`,
           `CREATE TABLE IF NOT EXISTS account (
             id TEXT PRIMARY KEY,
+            issuer TEXT NOT NULL,
             account_id TEXT NOT NULL,
             provider_id TEXT NOT NULL,
             user_id TEXT NOT NULL,
@@ -101,6 +102,20 @@ export async function ensureSchema(event?: H3Event) {
 
         for (const statement of statements) {
           await database.run(sql.raw(statement))
+        }
+
+        // Better Auth 1.7+ requires issuer when resolving OAuth accounts. The
+        // table may already exist from an older deployment, so upgrade it in
+        // place instead of relying on CREATE TABLE IF NOT EXISTS.
+        const accountColumns = await database.all(sql.raw(`PRAGMA table_info(account)`)).catch(() => [])
+        const hasIssuer = Array.isArray(accountColumns) && accountColumns.some(
+          (column: any) => column?.name === 'issuer'
+        )
+
+        if (!hasIssuer) {
+          await database.run(sql.raw(
+            `ALTER TABLE account ADD COLUMN issuer TEXT`
+          )).catch(() => {})
         }
 
         const documentColumns = await database.all(sql.raw(`PRAGMA table_info(documents)`)).catch(() => [])
