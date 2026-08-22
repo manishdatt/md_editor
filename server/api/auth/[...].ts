@@ -13,6 +13,16 @@ export default defineEventHandler(async (event) => {
         headers: { 'Content-Type': 'application/json' }
       }))
     }
-    throw error
+
+    const message = error?.message || error?.statusMessage || 'Authentication error'
+    const statusCode = error?.statusCode || error?.status || 500
+    return sendWebResponse(event, new Response(JSON.stringify({
+      error: message,
+      message,
+      statusCode
+    }), {
+      status: statusCode,
+      headers: { 'Content-Type': 'application/json' }
+    }))
   }
 })

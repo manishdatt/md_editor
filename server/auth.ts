@@ -35,7 +35,7 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     }
 
     const secret = (config.betterAuthSecret as string) || cfEnv.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
-    const baseURL = (config.betterAuthUrl as string) || cfEnv.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL || undefined
+    const baseURL = (config.betterAuthUrl as string) || cfEnv.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL || (config.public?.siteUrl as string) || 'https://shbd.bioinfo.guru'
 
     authInstance = betterAuth({
       baseURL,

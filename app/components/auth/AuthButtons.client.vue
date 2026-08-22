@@ -1,10 +1,20 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { authClient } from '~/lib/auth-client'
 
 const sessionState = authClient.useSession()
+const authError = ref('')
 
-function signInWith(provider: 'github' | 'google') {
-  authClient.signIn.social({ provider, callbackURL: '/' })
+async function signInWith(provider: 'github' | 'google') {
+  authError.value = ''
+  try {
+    const result = await authClient.signIn.social({ provider, callbackURL: '/' })
+    if (result?.error) {
+      authError.value = result.error.message || `Sign in with ${provider} failed`
+    }
+  } catch (err: any) {
+    authError.value = err?.message || `Failed to initiate ${provider} sign in`
+  }
 }
 
 function signOut() {
@@ -43,5 +53,9 @@ function signOut() {
         Sign out
       </button>
     </template>
+
+    <span v-if="authError" class="text-xs text-red-600 dark:text-red-400">
+      {{ authError }}
+    </span>
   </div>
 </template>
