@@ -134,6 +134,27 @@ export default defineEventHandler(async (event) => {
 })
 ```
 
+### Bug 3 — Client-side crash after hydration: `Invalid base URL: /api/auth`
+
+Once Bug 1 stopped crashing SSR, hydration reached the browser and hit a latent bug in `app/lib/auth-client.ts`:
+
+```ts
+createAuthClient({ baseURL: '/api/auth' })   // ← better-auth validates via new URL(...)
+```
+
+`new URL('/api/auth')` has no origin → `TypeError: Failed to construct 'URL'` wrapped in
+`BetterAuthError`, thrown unconditionally in the browser console. It never surfaced before
+because SSR always crashed first.
+
+**Fix:** omit `baseURL` entirely — better-auth infers `window.location.origin`:
+
+```ts
+export const authClient = createAuthClient()
+```
+
+Verified locally: `/api/auth/get-session` now returns HTTP 200 with body `null`
+(the handler executes end-to-end) instead of a 500 ReferenceError.
+
 ---
 
 ## How to verify

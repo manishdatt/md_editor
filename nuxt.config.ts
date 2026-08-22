@@ -45,5 +45,10 @@ export default defineNuxtConfig({
     }
   },
   css: ['~/assets/css/tailwind.css'],
+  vite: {
+    define: {
+      __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'true'
+    }
+  },
   devtools: { enabled: true }
 })
