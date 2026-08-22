@@ -11,6 +11,10 @@ async function signInWith(provider: 'github' | 'google') {
     const result = await authClient.signIn.social({ provider, callbackURL: '/' })
     if (result?.error) {
       authError.value = result.error.message || `Sign in with ${provider} failed`
+      return
+    }
+    if (result?.data?.url) {
+      window.location.href = result.data.url
     }
   } catch (err: any) {
     const detail = err?.data?.message || err?.data?.error || err?.message || ''
