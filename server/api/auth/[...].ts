@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
       }))
     }
 
-    const message = error?.message || error?.statusMessage || (typeof error === 'string' ? error : 'Authentication error')
+    const message = error?.body?.message || error?.cause?.message || error?.message || error?.statusMessage || (typeof error === 'string' ? error : 'Authentication error')
     const statusCode = error?.statusCode || error?.status || 500
     return sendWebResponse(event, new Response(JSON.stringify({
       error: message,
