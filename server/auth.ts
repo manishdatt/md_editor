@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth'
+import { google, github } from 'better-auth/social-providers'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import type { BetterAuth } from 'better-auth'
 import { getRequestHeader, type H3Event } from 'h3'
@@ -11,37 +12,28 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
 
   await ensureSchema(event)
 
-  const socialProviders: Record<string, { clientId: string, clientSecret: string }> = {}
+  const githubId = cfEnv.GITHUB_CLIENT_ID || (config.githubClientId as string) || process.env.GITHUB_CLIENT_ID || ''
+  const githubSecret = cfEnv.GITHUB_CLIENT_SECRET || (config.githubClientSecret as string) || process.env.GITHUB_CLIENT_SECRET || ''
+  const googleId = cfEnv.GOOGLE_CLIENT_ID || (config.googleClientId as string) || process.env.GOOGLE_CLIENT_ID || ''
+  const googleSecret = cfEnv.GOOGLE_CLIENT_SECRET || (config.googleClientSecret as string) || process.env.GOOGLE_CLIENT_SECRET || ''
 
-  const githubId = cfEnv.GITHUB_CLIENT_ID || cfEnv.NUXT_GITHUB_CLIENT_ID || (config.githubClientId as string) || process.env.GITHUB_CLIENT_ID
-  const githubSecret = cfEnv.GITHUB_CLIENT_SECRET || cfEnv.NUXT_GITHUB_CLIENT_SECRET || (config.githubClientSecret as string) || process.env.GITHUB_CLIENT_SECRET
+  const socialProviders: Record<string, any> = {}
   if (githubId && githubSecret) {
-    socialProviders.github = {
-      clientId: githubId,
-      clientSecret: githubSecret
-    }
+    socialProviders.github = github({ clientId: githubId, clientSecret: githubSecret })
   }
-
-  const googleId = cfEnv.GOOGLE_CLIENT_ID || cfEnv.NUXT_GOOGLE_CLIENT_ID || (config.googleClientId as string) || process.env.GOOGLE_CLIENT_ID
-  const googleSecret = cfEnv.GOOGLE_CLIENT_SECRET || cfEnv.NUXT_GOOGLE_CLIENT_SECRET || (config.googleClientSecret as string) || process.env.GOOGLE_CLIENT_SECRET
   if (googleId && googleSecret) {
-    socialProviders.google = {
-      clientId: googleId,
-      clientSecret: googleSecret
-    }
+    socialProviders.google = google({ clientId: googleId, clientSecret: googleSecret })
   }
 
   let requestOrigin = ''
   if (event) {
     const host = getRequestHeader(event, 'x-forwarded-host') || getRequestHeader(event, 'host')
     const proto = getRequestHeader(event, 'x-forwarded-proto') || 'https'
-    if (host) {
-      requestOrigin = `${proto}://${host}`
-    }
+    if (host) requestOrigin = `${proto}://${host}`
   }
 
-  const secret = cfEnv.BETTER_AUTH_SECRET || cfEnv.NUXT_BETTER_AUTH_SECRET || (config.betterAuthSecret as string) || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
-  const baseURL = requestOrigin || cfEnv.BETTER_AUTH_URL || cfEnv.NUXT_BETTER_AUTH_URL || (config.betterAuthUrl as string) || process.env.BETTER_AUTH_URL || (config.public?.siteUrl as string) || 'https://shbd.bioinfo.guru'
+  const secret = cfEnv.BETTER_AUTH_SECRET || (config.betterAuthSecret as string) || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
+  const baseURL = requestOrigin || cfEnv.BETTER_AUTH_URL || (config.betterAuthUrl as string) || process.env.BETTER_AUTH_URL || 'https://shbd.bioinfo.guru'
 
   return betterAuth({
     baseURL,
@@ -72,3 +64,4 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     }
   })
 }
+
