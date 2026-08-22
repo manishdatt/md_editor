@@ -6,6 +6,7 @@ import { ensureSchema, getDb } from './utils/database'
 import { user, session, account, verification } from './db/schema'
 
 let authInstance: BetterAuth | null = null
+let hasRegisteredSocials = false
 
 export async function getAuth(event?: H3Event): Promise<BetterAuth> {
   const config = event ? useRuntimeConfig(event) : useRuntimeConfig()
@@ -36,10 +37,11 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
   const secret = (config.betterAuthSecret as string) || cfEnv.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
   const baseURL = (config.betterAuthUrl as string) || cfEnv.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL || (config.public?.siteUrl as string) || 'https://shbd.bioinfo.guru'
 
-  const hasSocials = Object.keys(socialProviders).length > 0
-  const instanceNeedsRefresh = !authInstance || (hasSocials && (!authInstance.options?.socialProviders || Object.keys(authInstance.options.socialProviders).length === 0))
+  const currentHasSocials = Object.keys(socialProviders).length > 0
+  const needsRebuild = !authInstance || (currentHasSocials && !hasRegisteredSocials)
 
-  if (instanceNeedsRefresh) {
+  if (needsRebuild) {
+    hasRegisteredSocials = currentHasSocials
     authInstance = betterAuth({
       baseURL,
       secret,
