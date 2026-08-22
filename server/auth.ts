@@ -1,36 +1,47 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import type { BetterAuth } from 'better-auth'
+import type { H3Event } from 'h3'
 import { ensureSchema, getDb } from './utils/database'
 import { user, session, account, verification } from './db/schema'
 
 let authInstance: BetterAuth | null = null
 
-export async function getAuth(): Promise<BetterAuth> {
-  await ensureSchema()
+export async function getAuth(event?: H3Event): Promise<BetterAuth> {
+  const config = event ? useRuntimeConfig(event) : useRuntimeConfig()
+  const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || {}
+
+  await ensureSchema(event)
 
   if (!authInstance) {
     const socialProviders: Record<string, { clientId: string, clientSecret: string }> = {}
 
-    if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+    const githubId = (config.githubClientId as string) || cfEnv.GITHUB_CLIENT_ID || process.env.GITHUB_CLIENT_ID
+    const githubSecret = (config.githubClientSecret as string) || cfEnv.GITHUB_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET
+    if (githubId && githubSecret) {
       socialProviders.github = {
-        clientId: process.env.GITHUB_CLIENT_ID,
-        clientSecret: process.env.GITHUB_CLIENT_SECRET
+        clientId: githubId,
+        clientSecret: githubSecret
       }
     }
 
-    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    const googleId = (config.googleClientId as string) || cfEnv.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
+    const googleSecret = (config.googleClientSecret as string) || cfEnv.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
+    if (googleId && googleSecret) {
       socialProviders.google = {
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET
+        clientId: googleId,
+        clientSecret: googleSecret
       }
     }
+
+    const secret = (config.betterAuthSecret as string) || cfEnv.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
+    const baseURL = (config.betterAuthUrl as string) || cfEnv.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL || undefined
 
     authInstance = betterAuth({
-      baseURL: process.env.BETTER_AUTH_URL || undefined,
-      secret: process.env.BETTER_AUTH_SECRET,
+      baseURL,
+      secret,
       socialProviders,
-      database: drizzleAdapter(getDb(), {
+      database: drizzleAdapter(getDb(event), {
         provider: 'sqlite',
         usePlural: false,
         schema: { user, session, account, verification }

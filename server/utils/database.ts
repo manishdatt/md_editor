@@ -2,14 +2,18 @@ import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { sql } from 'drizzle-orm'
+import type { H3Event } from 'h3'
 import * as schema from '~~/server/db/schema'
 
 let dbInstance: LibSQLDatabase<typeof schema> | null = null
 let schemaReady: Promise<void> | null = null
 
-function getConfig() {
-  const url = process.env.TURSO_URL
-  const authToken = process.env.TURSO_AUTH_TOKEN
+function getConfig(event?: H3Event) {
+  const config = event ? useRuntimeConfig(event) : useRuntimeConfig()
+  const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || {}
+
+  const url = (config.tursoUrl as string) || cfEnv.TURSO_URL || process.env.TURSO_URL
+  const authToken = (config.tursoAuthToken as string) || cfEnv.TURSO_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN
 
   if (!url || !authToken) {
     throw createError({
@@ -21,9 +25,9 @@ function getConfig() {
   return { url, authToken }
 }
 
-export function getDb(): LibSQLDatabase<typeof schema> {
+export function getDb(event?: H3Event): LibSQLDatabase<typeof schema> {
   if (!dbInstance) {
-    const { url, authToken } = getConfig()
+    const { url, authToken } = getConfig(event)
     const client = createClient({ url, authToken })
     dbInstance = drizzle(client, { schema })
   }
@@ -31,10 +35,10 @@ export function getDb(): LibSQLDatabase<typeof schema> {
   return dbInstance
 }
 
-export async function ensureSchema() {
+export async function ensureSchema(event?: H3Event) {
   if (!schemaReady) {
     schemaReady = (async () => {
-      const database = getDb()
+      const database = getDb(event)
 
       const statements = [
         `CREATE TABLE IF NOT EXISTS user (
@@ -111,7 +115,7 @@ export async function ensureSchema() {
   await schemaReady
 }
 
-export async function useDatabase(): Promise<LibSQLDatabase<typeof schema>> {
-  await ensureSchema()
-  return getDb()
+export async function useDatabase(event?: H3Event): Promise<LibSQLDatabase<typeof schema>> {
+  await ensureSchema(event)
+  return getDb(event)
 }

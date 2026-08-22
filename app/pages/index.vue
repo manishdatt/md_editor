@@ -11,7 +11,7 @@ useSeoMeta({
 
 <template>
   <ClientOnly>
-    <LazyEditorWorkspace />
+    <EditorWorkspace />
     <template #fallback>
       <div class="flex min-h-[calc(100vh-1.5rem)] flex-col gap-3">
         <div class="h-[4.5rem] animate-pulse rounded-lg border border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-900" />
