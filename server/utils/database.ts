@@ -43,6 +43,7 @@ export async function ensureSchema(event?: H3Event) {
   if (!schemaReady) {
     schemaReady = (async () => {
       try {
+        console.info('[auth-db] ensuring database schema')
         const database = getDb(event)
 
         const statements = [
@@ -128,10 +129,13 @@ export async function ensureSchema(event?: H3Event) {
             `ALTER TABLE documents ADD COLUMN format TEXT NOT NULL DEFAULT 'markdown'`
           )).catch(() => {})
         }
+
+        console.info('[auth-db] database schema ready', {
+          accountIssuer: hasIssuer || true,
+          documentsFormat: hasFormat || true
+        })
       } catch (err) {
-        if (import.meta.dev) {
-          console.error('[ensureSchema error]', err)
-        }
+        console.error('[auth-db] schema initialization failed; continuing with existing schema', err)
       }
     })()
   }

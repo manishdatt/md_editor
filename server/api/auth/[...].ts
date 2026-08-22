@@ -3,24 +3,41 @@ import { getAuth } from '../../auth'
 
 export default defineEventHandler(async (event) => {
   const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || {}
+  const requestURL = getRequestURL(event)
+  const request = toWebRequest(event)
 
-  console.log('[auth] cfEnv keys:', Object.keys(cfEnv))
-  console.log('[auth] hasGoogle:', !!cfEnv.GOOGLE_CLIENT_ID, 'hasGoogleSecret:', !!cfEnv.GOOGLE_CLIENT_SECRET, 'hasGitHub:', !!cfEnv.GITHUB_CLIENT_ID, 'hasGitHubSecret:', !!cfEnv.GITHUB_CLIENT_SECRET)
-  console.log('[auth] hasTurso:', !!cfEnv.TURSO_URL, 'hasSecret:', !!cfEnv.BETTER_AUTH_SECRET)
+  console.info('[auth] request received', {
+    method: request.method,
+    pathname: requestURL.pathname,
+    origin: requestURL.origin,
+    hasCookie: request.headers.has('cookie'),
+    contentType: request.headers.get('content-type'),
+    cfEnvKeys: Object.keys(cfEnv).filter((key) => /^(GOOGLE|GITHUB|TURSO|BETTER_AUTH)/.test(key))
+  })
 
   try {
     const auth = await getAuth(event)
-    const response = await auth.handler(toWebRequest(event))
+    const response = await auth.handler(request)
 
-    console.log('[auth] handler response status:', response.status)
+    console.info('[auth] handler response', {
+      status: response.status,
+      contentType: response.headers.get('content-type'),
+      hasLocation: response.headers.has('location')
+    })
     if (response.status >= 400) {
       const cloned = response.clone()
       try {
         const body = await cloned.json()
-        console.error('[auth] handler error body:', JSON.stringify(body))
+        console.error('[auth] handler error response', {
+          status: response.status,
+          body
+        })
       } catch {
         const text = await cloned.text()
-        console.error('[auth] handler error text:', text)
+        console.error('[auth] handler error response text', {
+          status: response.status,
+          text: text.slice(0, 1000)
+        })
       }
     }
 

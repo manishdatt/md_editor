@@ -2,13 +2,21 @@ import { betterAuth } from 'better-auth'
 import { google, github } from 'better-auth/social-providers'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import type { BetterAuth } from 'better-auth'
-import { getRequestHeader, type H3Event } from 'h3'
+import { getRequestURL, type H3Event } from 'h3'
 import { ensureSchema, getDb } from './utils/database'
 import { user, session, account, verification } from './db/schema'
 
 export async function getAuth(event?: H3Event): Promise<BetterAuth> {
   const config = event ? useRuntimeConfig(event) : useRuntimeConfig()
   const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || (event?.context as any)?.env || {}
+
+  console.info('[auth] initializing Better Auth', {
+    hasEvent: !!event,
+    cfEnvKeys: Object.keys(cfEnv).filter((key) => /^(GOOGLE|GITHUB|TURSO|BETTER_AUTH)/.test(key)),
+    hasTursoUrl: !!(cfEnv.TURSO_URL || config.tursoUrl || process.env.TURSO_URL),
+    hasTursoToken: !!(cfEnv.TURSO_AUTH_TOKEN || config.tursoAuthToken || process.env.TURSO_AUTH_TOKEN),
+    hasSecret: !!(cfEnv.BETTER_AUTH_SECRET || config.betterAuthSecret || process.env.BETTER_AUTH_SECRET)
+  })
 
   await ensureSchema(event)
 
@@ -25,15 +33,19 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     socialProviders.google = google({ clientId: googleId, clientSecret: googleSecret })
   }
 
-  let requestOrigin = ''
-  if (event) {
-    const host = getRequestHeader(event, 'x-forwarded-host') || getRequestHeader(event, 'host')
-    const proto = getRequestHeader(event, 'x-forwarded-proto') || 'https'
-    if (host) requestOrigin = `${proto}://${host}`
-  }
-
   const secret = cfEnv.BETTER_AUTH_SECRET || (config.betterAuthSecret as string) || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
-  const baseURL = requestOrigin || cfEnv.BETTER_AUTH_URL || (config.betterAuthUrl as string) || process.env.BETTER_AUTH_URL || 'https://shbd.bioinfo.guru'
+  const configuredBaseURL = cfEnv.BETTER_AUTH_URL || (config.betterAuthUrl as string) || process.env.BETTER_AUTH_URL || ''
+  const requestOrigin = event ? getRequestURL(event).origin : ''
+  const baseURL = configuredBaseURL || requestOrigin || 'https://shbd.bioinfo.guru'
+
+  console.info('[auth] Better Auth configuration resolved', {
+    baseURL,
+    baseURLSource: configuredBaseURL ? 'configured' : requestOrigin ? 'request-origin' : 'fallback',
+    providers: Object.keys(socialProviders),
+    googleCredentials: !!googleId && !!googleSecret,
+    githubCredentials: !!githubId && !!githubSecret,
+    hasSecret: secret !== 'fallback-secret-for-session-key-must-be-min-32-chars-long'
+  })
 
   return betterAuth({
     baseURL,
@@ -64,4 +76,3 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     }
   })
 }
-
