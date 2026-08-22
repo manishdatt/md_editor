@@ -16,14 +16,6 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     ...(context?.cloudflare?.env || {})
   } as Record<string, string | undefined>
 
-  console.info('[auth] initializing Better Auth', {
-    hasEvent: !!event,
-    cfEnvKeys: Object.keys(cfEnv).filter((key) => /^(GOOGLE|GITHUB|TURSO|BETTER_AUTH)/.test(key)),
-    hasTursoUrl: !!(cfEnv.TURSO_URL || config.tursoUrl || process.env.TURSO_URL),
-    hasTursoToken: !!(cfEnv.TURSO_AUTH_TOKEN || config.tursoAuthToken || process.env.TURSO_AUTH_TOKEN),
-    hasSecret: !!(cfEnv.BETTER_AUTH_SECRET || config.betterAuthSecret || process.env.BETTER_AUTH_SECRET)
-  })
-
   await ensureSchema(event)
 
   const githubId = cfEnv.GITHUB_CLIENT_ID || cfEnv.NUXT_GITHUB_CLIENT_ID || (config.githubClientId as string) || process.env.GITHUB_CLIENT_ID || process.env.NUXT_GITHUB_CLIENT_ID || ''
@@ -43,15 +35,6 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
   const configuredBaseURL = cfEnv.BETTER_AUTH_URL || (config.betterAuthUrl as string) || process.env.BETTER_AUTH_URL || ''
   const requestOrigin = event ? getRequestURL(event).origin : ''
   const baseURL = configuredBaseURL || requestOrigin || 'https://shbd.bioinfo.guru'
-
-  console.info('[auth] Better Auth configuration resolved', {
-    baseURL,
-    baseURLSource: configuredBaseURL ? 'configured' : requestOrigin ? 'request-origin' : 'fallback',
-    providers: Object.keys(socialProviders),
-    googleCredentials: !!googleId && !!googleSecret,
-    githubCredentials: !!githubId && !!githubSecret,
-    hasSecret: secret !== 'fallback-secret-for-session-key-must-be-min-32-chars-long'
-  })
 
   return betterAuth({
     baseURL,
@@ -79,20 +62,6 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24
-    },
-    // Log the real underlying error. Better Auth's router swallows
-    // non-APIError exceptions (e.g. DB failures) into an empty 500 response,
-    // which is why the client only ever saw a generic message. The actual
-    // cause is only visible in server logs - this makes it explicit.
-    onAPIError: {
-      onError(error) {
-        console.error('[auth] Better Auth API error', {
-          name: (error as any)?.name,
-          message: (error as any)?.message || String(error),
-          statusCode: (error as any)?.statusCode,
-          stack: (error as any)?.stack
-        })
-      }
     }
   })
 }

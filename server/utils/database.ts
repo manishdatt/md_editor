@@ -46,7 +46,6 @@ export function getDb(event?: H3Event): LibSQLDatabase<typeof schema> {
 export async function ensureSchema(event?: H3Event) {
   if (!schemaReady) {
     schemaReady = (async () => {
-      console.info('[auth-db] ensuring database schema')
       const database = getDb(event)
 
       const failures: string[] = []
@@ -147,13 +146,6 @@ export async function ensureSchema(event?: H3Event) {
           statusMessage: `[auth-db] schema statements failed: ${failures.join(' | ')}`
         })
       }
-
-      console.info('[auth-db] database schema ready', {
-        accountIssuerPresentBeforeUpgrade: hasIssuer,
-        accountIssuerUpgradeAttempted: !hasIssuer,
-        documentsFormatPresentBeforeUpgrade: hasFormat,
-        documentsFormatUpgradeAttempted: !hasFormat
-      })
     })().catch((err) => {
       // Do NOT cache a failed initialization - retry on the next request,
       // otherwise one transient cold-start failure breaks auth for the whole
