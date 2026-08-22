@@ -12,14 +12,18 @@ function getConfig(event?: H3Event) {
   const config = event ? useRuntimeConfig(event) : useRuntimeConfig()
   const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || {}
 
-  const url = (config.tursoUrl as string) || cfEnv.TURSO_URL || process.env.TURSO_URL
-  const authToken = (config.tursoAuthToken as string) || cfEnv.TURSO_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN
+  let url = (config.tursoUrl as string) || cfEnv.TURSO_URL || process.env.TURSO_URL || ''
+  const authToken = (config.tursoAuthToken as string) || cfEnv.TURSO_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN || ''
 
   if (!url || !authToken) {
     throw createError({
       statusCode: 500,
       statusMessage: 'TURSO_URL and TURSO_AUTH_TOKEN must be configured'
     })
+  }
+
+  if (url.startsWith('libsql://')) {
+    url = url.replace(/^libsql:\/\//, 'https://')
   }
 
   return { url, authToken }
