@@ -7,7 +7,14 @@ import { user, session, account, verification } from './db/schema'
 
 export async function getAuth(event?: H3Event): Promise<BetterAuth> {
   const config = event ? useRuntimeConfig(event) : useRuntimeConfig()
-  const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || (event?.context as any)?.env || {}
+  const context = event?.context as any
+  // Nuxt/Cloudflare can expose bindings through either location depending on
+  // the Pages runtime. Merge both instead of allowing an empty object in one
+  // location to hide credentials from the other.
+  const cfEnv = {
+    ...(context?.env || {}),
+    ...(context?.cloudflare?.env || {})
+  } as Record<string, string | undefined>
 
   console.info('[auth] initializing Better Auth', {
     hasEvent: !!event,
@@ -19,10 +26,10 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
 
   await ensureSchema(event)
 
-  const githubId = cfEnv.GITHUB_CLIENT_ID || (config.githubClientId as string) || process.env.GITHUB_CLIENT_ID || ''
-  const githubSecret = cfEnv.GITHUB_CLIENT_SECRET || (config.githubClientSecret as string) || process.env.GITHUB_CLIENT_SECRET || ''
-  const googleId = cfEnv.GOOGLE_CLIENT_ID || (config.googleClientId as string) || process.env.GOOGLE_CLIENT_ID || ''
-  const googleSecret = cfEnv.GOOGLE_CLIENT_SECRET || (config.googleClientSecret as string) || process.env.GOOGLE_CLIENT_SECRET || ''
+  const githubId = cfEnv.GITHUB_CLIENT_ID || cfEnv.NUXT_GITHUB_CLIENT_ID || (config.githubClientId as string) || process.env.GITHUB_CLIENT_ID || process.env.NUXT_GITHUB_CLIENT_ID || ''
+  const githubSecret = cfEnv.GITHUB_CLIENT_SECRET || cfEnv.NUXT_GITHUB_CLIENT_SECRET || (config.githubClientSecret as string) || process.env.GITHUB_CLIENT_SECRET || process.env.NUXT_GITHUB_CLIENT_SECRET || ''
+  const googleId = cfEnv.GOOGLE_CLIENT_ID || cfEnv.NUXT_GOOGLE_CLIENT_ID || (config.googleClientId as string) || process.env.GOOGLE_CLIENT_ID || process.env.NUXT_GOOGLE_CLIENT_ID || ''
+  const googleSecret = cfEnv.GOOGLE_CLIENT_SECRET || cfEnv.NUXT_GOOGLE_CLIENT_SECRET || (config.googleClientSecret as string) || process.env.GOOGLE_CLIENT_SECRET || process.env.NUXT_GOOGLE_CLIENT_SECRET || ''
 
   const socialProviders: Record<string, any> = {}
   if (githubId && githubSecret) {

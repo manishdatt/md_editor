@@ -5,7 +5,11 @@ export default defineEventHandler(async (event) => {
   const traceId = globalThis.crypto?.randomUUID?.() || `auth-${Date.now().toString(36)}`
 
   try {
-    const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || {}
+    const context = event?.context as any
+    const cfEnv = {
+      ...(context?.env || {}),
+      ...(context?.cloudflare?.env || {})
+    } as Record<string, string | undefined>
     const requestURL = getRequestURL(event)
     const request = toWebRequest(event)
 

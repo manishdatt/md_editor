@@ -10,7 +10,11 @@ let schemaReady: Promise<void> | null = null
 
 function getConfig(event?: H3Event) {
   const config = event ? useRuntimeConfig(event) : useRuntimeConfig()
-  const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || {}
+  const context = event?.context as any
+  const cfEnv = {
+    ...(context?.env || {}),
+    ...(context?.cloudflare?.env || {})
+  } as Record<string, string | undefined>
 
   let url = (config.tursoUrl as string) || cfEnv.TURSO_URL || process.env.TURSO_URL || ''
   const authToken = (config.tursoAuthToken as string) || cfEnv.TURSO_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN || ''
