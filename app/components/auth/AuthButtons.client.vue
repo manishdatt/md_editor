@@ -13,7 +13,8 @@ async function signInWith(provider: 'github' | 'google') {
       authError.value = result.error.message || `Sign in with ${provider} failed`
     }
   } catch (err: any) {
-    authError.value = err?.message || `Failed to initiate ${provider} sign in`
+    const detail = err?.data?.message || err?.data?.error || err?.message || ''
+    authError.value = detail ? `Failed: ${detail}` : `Failed to initiate ${provider} sign in`
   }
 }
 
