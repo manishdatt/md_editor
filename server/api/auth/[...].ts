@@ -1,32 +1,27 @@
-import { toWebRequest, sendWebResponse } from 'h3'
+import { toWebRequest } from 'h3'
 import { getAuth } from '../../auth'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const auth = await getAuth(event)
-    const request = event.web?.request ? event.web.request.clone() : toWebRequest(event)
-    const response = await auth.handler(request)
-    return sendWebResponse(event, response)
-  } catch (error: any) {
-    if (event.path.includes('/get-session')) {
-      return sendWebResponse(event, new Response(JSON.stringify(null), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }))
+  const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || {}
+
+  console.log('[auth] cfEnv keys:', Object.keys(cfEnv))
+  console.log('[auth] hasGoogle:', !!cfEnv.GOOGLE_CLIENT_ID, 'hasGitHub:', !!cfEnv.GITHUB_CLIENT_ID)
+  console.log('[auth] hasTurso:', !!cfEnv.TURSO_URL, 'hasSecret:', !!cfEnv.BETTER_AUTH_SECRET)
+
+  const auth = await getAuth(event)
+  const response = await auth.handler(toWebRequest(event))
+
+  console.log('[auth] handler response status:', response.status)
+  if (response.status >= 400) {
+    const cloned = response.clone()
+    try {
+      const body = await cloned.json()
+      console.error('[auth] handler error body:', JSON.stringify(body))
+    } catch {
+      const text = await cloned.text()
+      console.error('[auth] handler error text:', text)
     }
-
-    const message = error?.body?.message || error?.cause?.message || error?.message || error?.statusMessage || (typeof error === 'string' ? error : 'Authentication error')
-    const statusCode = error?.statusCode || error?.status || 500
-    const detail = error?.stack || String(error?.cause || error)
-
-    return sendWebResponse(event, new Response(JSON.stringify({
-      error: message,
-      message,
-      detail,
-      statusCode
-    }), {
-      status: statusCode,
-      headers: { 'Content-Type': 'application/json' }
-    }))
   }
+
+  return response
 })

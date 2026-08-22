@@ -8,9 +8,12 @@ const authError = ref('')
 async function signInWith(provider: 'github' | 'google') {
   authError.value = ''
   try {
-    console.log('[signInWith] Requesting social sign-in for:', provider)
-    const result = await authClient.signIn.social({ provider, callbackURL: '/', disableRedirect: true })
-    console.log('[signInWith] Response result:', result)
+    console.log('[signInWith] Initiating social sign-in for:', provider)
+    const result = await authClient.signIn.social({
+      provider,
+      callbackURL: '/'
+    })
+    console.log('[signInWith] Result returned:', result)
 
     if (result?.error) {
       authError.value = result.error.message || `Sign in with ${provider} failed`
@@ -19,13 +22,11 @@ async function signInWith(provider: 'github' | 'google') {
 
     const redirectUrl = (result as any)?.data?.url || (result as any)?.url || (result as any)?.data?.redirectUrl
     if (redirectUrl) {
-      console.log('[signInWith] Redirecting browser to:', redirectUrl)
+      console.log('[signInWith] Manual redirecting to:', redirectUrl)
       window.location.href = redirectUrl
-    } else {
-      console.warn('[signInWith] No redirect URL found in response:', result)
     }
   } catch (err: any) {
-    console.error('[signInWith] Exception:', err)
+    console.error('[signInWith] Caught error:', err)
     const detail = err?.data?.message || err?.data?.error || err?.data?.detail || err?.message || String(err)
     authError.value = detail ? `Failed: ${detail}` : `Failed to initiate ${provider} sign in`
   }
