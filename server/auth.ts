@@ -79,6 +79,20 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24
+    },
+    // Log the real underlying error. Better Auth's router swallows
+    // non-APIError exceptions (e.g. DB failures) into an empty 500 response,
+    // which is why the client only ever saw a generic message. The actual
+    // cause is only visible in server logs - this makes it explicit.
+    onAPIError: {
+      onError(error) {
+        console.error('[auth] Better Auth API error', {
+          name: (error as any)?.name,
+          message: (error as any)?.message || String(error),
+          statusCode: (error as any)?.statusCode,
+          stack: (error as any)?.stack
+        })
+      }
     }
   })
 }
