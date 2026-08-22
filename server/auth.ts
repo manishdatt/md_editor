@@ -57,7 +57,7 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     baseURL,
     secret,
     socialProviders,
-    advanced: {
+    account: {
       storeStateStrategy: 'cookie'
     },
     database: drizzleAdapter(getDb(event), {

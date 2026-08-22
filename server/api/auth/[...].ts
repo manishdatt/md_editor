@@ -45,6 +45,7 @@ export default defineEventHandler(async (event) => {
           return new Response(JSON.stringify({
             message: body?.message || 'Authentication provider request failed',
             code: body?.code,
+            detail: body,
             traceId
           }), {
             status: response.status,
@@ -62,6 +63,7 @@ export default defineEventHandler(async (event) => {
         if (response.status >= 500) {
           return new Response(JSON.stringify({
             message: 'Authentication provider request failed',
+            detail: text.slice(0, 1000),
             traceId
           }), {
             status: response.status,
@@ -80,6 +82,7 @@ export default defineEventHandler(async (event) => {
     })
     return new Response(JSON.stringify({
       message: 'Authentication server error',
+      detail: error?.message || String(error),
       traceId
     }), {
       status: 500,
