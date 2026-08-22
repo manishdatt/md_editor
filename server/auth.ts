@@ -13,31 +13,33 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
 
   await ensureSchema(event)
 
-  if (!authInstance) {
-    const socialProviders: Record<string, { clientId: string, clientSecret: string }> = {}
+  const socialProviders: Record<string, { clientId: string, clientSecret: string }> = {}
 
-    const githubId = (config.githubClientId as string) || cfEnv.GITHUB_CLIENT_ID || process.env.GITHUB_CLIENT_ID
-    const githubSecret = (config.githubClientSecret as string) || cfEnv.GITHUB_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET
-    if (githubId && githubSecret) {
-      socialProviders.github = {
-        clientId: githubId,
-        clientSecret: githubSecret
-      }
+  const githubId = (config.githubClientId as string) || cfEnv.GITHUB_CLIENT_ID || process.env.GITHUB_CLIENT_ID
+  const githubSecret = (config.githubClientSecret as string) || cfEnv.GITHUB_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET
+  if (githubId && githubSecret) {
+    socialProviders.github = {
+      clientId: githubId,
+      clientSecret: githubSecret
     }
+  }
 
-    const googleId = (config.googleClientId as string) || cfEnv.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
-    const googleSecret = (config.googleClientSecret as string) || cfEnv.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
-    if (googleId && googleSecret) {
-      socialProviders.google = {
-        clientId: googleId,
-        clientSecret: googleSecret
-      }
+  const googleId = (config.googleClientId as string) || cfEnv.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
+  const googleSecret = (config.googleClientSecret as string) || cfEnv.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
+  if (googleId && googleSecret) {
+    socialProviders.google = {
+      clientId: googleId,
+      clientSecret: googleSecret
     }
+  }
 
-    const secret = (config.betterAuthSecret as string) || cfEnv.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
-    const baseURL = (config.betterAuthUrl as string) || cfEnv.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL || (config.public?.siteUrl as string) || 'https://shbd.bioinfo.guru'
+  const secret = (config.betterAuthSecret as string) || cfEnv.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
+  const baseURL = (config.betterAuthUrl as string) || cfEnv.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL || (config.public?.siteUrl as string) || 'https://shbd.bioinfo.guru'
 
-    authInstance = betterAuth({
+  const hasSocials = Object.keys(socialProviders).length > 0
+  const instanceNeedsRefresh = !authInstance || (hasSocials && (!authInstance.options?.socialProviders || Object.keys(authInstance.options.socialProviders).length === 0))
+
+  if (instanceNeedsRefresh) {
       baseURL,
       secret,
       socialProviders,
