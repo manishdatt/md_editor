@@ -13,7 +13,10 @@ export default defineNuxtConfig({
       titleTemplate: '%s | bioinfo.guru',
       title: 'shbd | bioinfo.guru',
       link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/logo_bioinfoguru.svg' }
+        { rel: 'icon', type: 'image/svg+xml', href: '/logo_bioinfoguru.svg' },
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Laila:wght@400;600;700&display=swap' }
       ],
       meta: [
         { name: 'description', content: 'Markdown editor with Mermaid, syntax highlighting, and PDF export.' },

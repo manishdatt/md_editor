@@ -1,15 +1,22 @@
 <script setup lang="ts">
 useSeoMeta({
   title: 'shbd',
-  description: 'Write Markdown with Mermaid diagrams, code highlighting, and PDF export.',
+  description: 'A versatile Markdown editor armed with AI prowess.',
   ogTitle: 'shbd',
-  ogDescription: 'Write Markdown with Mermaid diagrams, code highlighting, and PDF export.',
+  ogDescription: 'A versatile Markdown editor armed with AI prowess.',
   twitterTitle: 'shbd',
-  twitterDescription: 'Write Markdown with Mermaid diagrams, code highlighting, and PDF export.'
+  twitterDescription: 'A versatile Markdown editor armed with AI prowess.'
 })
 </script>
 
 <template>
+  <section class="mb-3 flex flex-col items-center gap-2 text-center sm:mb-6">
+    <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">shbd</h1>
+    <p class="max-w-xl text-sm text-neutral-600 sm:text-base dark:text-neutral-400">
+      A versatile editor armed with AI prowess.
+    </p>
+  </section>
+
   <ClientOnly>
     <EditorWorkspace />
     <template #fallback>

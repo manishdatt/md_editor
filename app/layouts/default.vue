@@ -33,11 +33,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-neutral-100 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+  <div class="flex min-h-screen flex-col bg-neutral-100 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
     <header class="sticky top-0 z-40 border-b border-neutral-300 bg-white/95 backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95">
       <div class="mx-auto flex w-full max-w-7xl items-center justify-between px-3 py-2 sm:px-6">
         <NuxtLink to="/" class="flex items-center gap-2">
           <img src="/logo_bioinfoguru.svg" alt="Logo" class="h-7 w-7">
+          <span class="text-2xl font-semibold tracking-tight" style="font-family: 'Laila', ui-sans-serif, system-ui, sans-serif">शब्द</span>
         </NuxtLink>
 
         <div class="flex items-center gap-2">
@@ -77,8 +78,18 @@ onMounted(() => {
       </div>
     </header>
 
-    <main class="mx-auto flex min-h-[calc(100vh-3.25rem)] w-full max-w-7xl flex-col p-3 sm:p-6">
+    <main class="mx-auto flex w-full max-w-7xl flex-1 flex-col p-3 sm:p-6">
       <slot />
     </main>
+
+    <footer class="border-t border-neutral-300 dark:border-neutral-700">
+      <div class="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-1 px-3 py-4 text-xs text-neutral-500 sm:flex-row sm:px-6 dark:text-neutral-400">
+        <span>&copy; {{ new Date().getFullYear() }} shbd</span>
+        <div class="flex items-center gap-4">
+          <a href="/privacy.html" class="hover:underline">Privacy Policy</a>
+          <a href="/terms.html" class="hover:underline">Terms of Service</a>
+        </div>
+      </div>
+    </footer>
   </div>
 </template>
