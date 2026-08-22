@@ -16,7 +16,8 @@ async function signInWith(provider: 'github' | 'google') {
     console.log('[signInWith] Result returned:', result)
 
     if (result?.error) {
-      authError.value = result.error.message || `Sign in with ${provider} failed`
+      console.error('[signInWith] Full error:', JSON.stringify(result.error))
+      authError.value = result.error.message || (result.error as any)?.statusText || `Sign in with ${provider} failed (${result.error.status})`
       return
     }
 
