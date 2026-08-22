@@ -40,6 +40,7 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
   const instanceNeedsRefresh = !authInstance || (hasSocials && (!authInstance.options?.socialProviders || Object.keys(authInstance.options.socialProviders).length === 0))
 
   if (instanceNeedsRefresh) {
+    authInstance = betterAuth({
       baseURL,
       secret,
       socialProviders,
