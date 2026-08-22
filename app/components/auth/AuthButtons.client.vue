@@ -11,7 +11,10 @@ async function signInWith(provider: 'github' | 'google') {
     console.log('[signInWith] Initiating social sign-in for:', provider)
     const result = await authClient.signIn.social({
       provider,
-      callbackURL: '/'
+      callbackURL: '/',
+      // Handle the redirect below so errors and malformed responses are
+      // surfaced instead of being swallowed by the client's auto-redirect.
+      disableRedirect: true
     })
     console.log('[signInWith] Result returned:', result)
 
@@ -24,7 +27,10 @@ async function signInWith(provider: 'github' | 'google') {
     const redirectUrl = (result as any)?.data?.url || (result as any)?.url || (result as any)?.data?.redirectUrl
     if (redirectUrl) {
       console.log('[signInWith] Manual redirecting to:', redirectUrl)
-      window.location.href = redirectUrl
+      window.location.assign(redirectUrl)
+    } else {
+      console.error('[signInWith] OAuth response did not contain a redirect URL:', result)
+      authError.value = `Sign in with ${provider} did not return a redirect URL`
     }
   } catch (err: any) {
     console.error('[signInWith] Caught error:', err)
