@@ -11,6 +11,8 @@ dist/
 
 # Cloudflare / Wrangler
 .wrangler/
+.dev.vars
+.dev.vars.*
 
 # Logs
 logs/

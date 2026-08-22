@@ -46,11 +46,12 @@ export function getDb(event?: H3Event): LibSQLDatabase<typeof schema> {
 export async function ensureSchema(event?: H3Event) {
   if (!schemaReady) {
     schemaReady = (async () => {
-      try {
-        console.info('[auth-db] ensuring database schema')
-        const database = getDb(event)
+      console.info('[auth-db] ensuring database schema')
+      const database = getDb(event)
 
-        const statements = [
+      const failures: string[] = []
+
+      const statements = [
           `CREATE TABLE IF NOT EXISTS user (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -105,45 +106,61 @@ export async function ensureSchema(event?: H3Event) {
           )`
         ]
 
-        for (const statement of statements) {
-          await database.run(sql.raw(statement))
-        }
-
-        // Better Auth 1.7+ requires issuer when resolving OAuth accounts. The
-        // table may already exist from an older deployment, so upgrade it in
-        // place instead of relying on CREATE TABLE IF NOT EXISTS.
-        const accountColumns = await database.all(sql.raw(`PRAGMA table_info(account)`)).catch(() => [])
-        const hasIssuer = Array.isArray(accountColumns) && accountColumns.some(
-          (column: any) => column?.name === 'issuer'
-        )
-
-        if (!hasIssuer) {
-          await database.run(sql.raw(
-            `ALTER TABLE account ADD COLUMN issuer TEXT`
-          )).catch(() => {})
-        }
-
-        const documentColumns = await database.all(sql.raw(`PRAGMA table_info(documents)`)).catch(() => [])
-        const hasFormat = Array.isArray(documentColumns) && documentColumns.some(
-          (column: any) => column?.name === 'format'
-        )
-
-        if (!hasFormat) {
-          await database.run(sql.raw(
-            `ALTER TABLE documents ADD COLUMN format TEXT NOT NULL DEFAULT 'markdown'`
-          )).catch(() => {})
-        }
-
-        console.info('[auth-db] database schema ready', {
-          accountIssuerPresentBeforeUpgrade: hasIssuer,
-          accountIssuerUpgradeAttempted: !hasIssuer,
-          documentsFormatPresentBeforeUpgrade: hasFormat,
-          documentsFormatUpgradeAttempted: !hasFormat
+      for (const statement of statements) {
+        await database.run(sql.raw(statement)).catch((err) => {
+          failures.push(`${statement.slice(0, 40)}... -> ${err?.message || String(err)}`)
         })
-      } catch (err) {
-        console.error('[auth-db] schema initialization failed; continuing with existing schema', err)
       }
-    })()
+
+      // Better Auth 1.7+ requires issuer when resolving OAuth accounts. The
+      // table may already exist from an older deployment, so upgrade it in
+      // place instead of relying on CREATE TABLE IF NOT EXISTS.
+      const accountColumns = await database.all(sql.raw(`PRAGMA table_info(account)`)).catch(() => [])
+      const hasIssuer = Array.isArray(accountColumns) && accountColumns.some(
+        (column: any) => column?.name === 'issuer'
+      )
+
+      if (!hasIssuer) {
+        await database.run(sql.raw(
+          `ALTER TABLE account ADD COLUMN issuer TEXT`
+        )).catch((err) => {
+          failures.push(`ALTER account issuer -> ${err?.message || String(err)}`)
+        })
+      }
+
+      const documentColumns = await database.all(sql.raw(`PRAGMA table_info(documents)`)).catch(() => [])
+      const hasFormat = Array.isArray(documentColumns) && documentColumns.some(
+        (column: any) => column?.name === 'format'
+      )
+
+      if (!hasFormat) {
+        await database.run(sql.raw(
+          `ALTER TABLE documents ADD COLUMN format TEXT NOT NULL DEFAULT 'markdown'`
+        )).catch((err) => {
+          failures.push(`ALTER documents format -> ${err?.message || String(err)}`)
+        })
+      }
+
+      if (failures.length > 0) {
+        throw createError({
+          statusCode: 500,
+          statusMessage: `[auth-db] schema statements failed: ${failures.join(' | ')}`
+        })
+      }
+
+      console.info('[auth-db] database schema ready', {
+        accountIssuerPresentBeforeUpgrade: hasIssuer,
+        accountIssuerUpgradeAttempted: !hasIssuer,
+        documentsFormatPresentBeforeUpgrade: hasFormat,
+        documentsFormatUpgradeAttempted: !hasFormat
+      })
+    })().catch((err) => {
+      // Do NOT cache a failed initialization - retry on the next request,
+      // otherwise one transient cold-start failure breaks auth for the whole
+      // lifetime of this worker isolate.
+      console.error('[auth-db] schema initialization failed; will retry on next request', err)
+      schemaReady = null
+    })
   }
 
   await schemaReady
