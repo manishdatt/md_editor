@@ -13,8 +13,8 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
 
   const socialProviders: Record<string, { clientId: string, clientSecret: string }> = {}
 
-  const githubId = cfEnv.GITHUB_CLIENT_ID || (config.githubClientId as string) || process.env.GITHUB_CLIENT_ID
-  const githubSecret = cfEnv.GITHUB_CLIENT_SECRET || (config.githubClientSecret as string) || process.env.GITHUB_CLIENT_SECRET
+  const githubId = cfEnv.GITHUB_CLIENT_ID || cfEnv.NUXT_GITHUB_CLIENT_ID || (config.githubClientId as string) || process.env.GITHUB_CLIENT_ID
+  const githubSecret = cfEnv.GITHUB_CLIENT_SECRET || cfEnv.NUXT_GITHUB_CLIENT_SECRET || (config.githubClientSecret as string) || process.env.GITHUB_CLIENT_SECRET
   if (githubId && githubSecret) {
     socialProviders.github = {
       clientId: githubId,
@@ -22,8 +22,8 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     }
   }
 
-  const googleId = cfEnv.GOOGLE_CLIENT_ID || (config.googleClientId as string) || process.env.GOOGLE_CLIENT_ID
-  const googleSecret = cfEnv.GOOGLE_CLIENT_SECRET || (config.googleClientSecret as string) || process.env.GOOGLE_CLIENT_SECRET
+  const googleId = cfEnv.GOOGLE_CLIENT_ID || cfEnv.NUXT_GOOGLE_CLIENT_ID || (config.googleClientId as string) || process.env.GOOGLE_CLIENT_ID
+  const googleSecret = cfEnv.GOOGLE_CLIENT_SECRET || cfEnv.NUXT_GOOGLE_CLIENT_SECRET || (config.googleClientSecret as string) || process.env.GOOGLE_CLIENT_SECRET
   if (googleId && googleSecret) {
     socialProviders.google = {
       clientId: googleId,
@@ -31,8 +31,8 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     }
   }
 
-  const secret = cfEnv.BETTER_AUTH_SECRET || (config.betterAuthSecret as string) || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
-  const baseURL = cfEnv.BETTER_AUTH_URL || (config.betterAuthUrl as string) || process.env.BETTER_AUTH_URL || (config.public?.siteUrl as string) || 'https://shbd.bioinfo.guru'
+  const secret = cfEnv.BETTER_AUTH_SECRET || cfEnv.NUXT_BETTER_AUTH_SECRET || (config.betterAuthSecret as string) || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
+  const baseURL = cfEnv.BETTER_AUTH_URL || cfEnv.NUXT_BETTER_AUTH_URL || (config.betterAuthUrl as string) || process.env.BETTER_AUTH_URL || (config.public?.siteUrl as string) || 'https://shbd.bioinfo.guru'
 
   return betterAuth({
     baseURL,

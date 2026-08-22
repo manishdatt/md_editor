@@ -26,7 +26,7 @@ async function signInWith(provider: 'github' | 'google') {
     }
   } catch (err: any) {
     console.error('[signInWith] Exception:', err)
-    const detail = err?.data?.message || err?.data?.error || err?.message || String(err)
+    const detail = err?.data?.message || err?.data?.error || err?.data?.detail || err?.message || String(err)
     authError.value = detail ? `Failed: ${detail}` : `Failed to initiate ${provider} sign in`
   }
 }

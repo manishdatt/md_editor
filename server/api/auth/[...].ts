@@ -4,7 +4,8 @@ import { getAuth } from '../../auth'
 export default defineEventHandler(async (event) => {
   try {
     const auth = await getAuth(event)
-    const response = await auth.handler(toWebRequest(event))
+    const request = event.web?.request ? event.web.request.clone() : toWebRequest(event)
+    const response = await auth.handler(request)
     return sendWebResponse(event, response)
   } catch (error: any) {
     if (event.path.includes('/get-session')) {
@@ -16,9 +17,12 @@ export default defineEventHandler(async (event) => {
 
     const message = error?.body?.message || error?.cause?.message || error?.message || error?.statusMessage || (typeof error === 'string' ? error : 'Authentication error')
     const statusCode = error?.statusCode || error?.status || 500
+    const detail = error?.stack || String(error?.cause || error)
+
     return sendWebResponse(event, new Response(JSON.stringify({
       error: message,
       message,
+      detail,
       statusCode
     }), {
       status: statusCode,
