@@ -9,7 +9,7 @@ async function signInWith(provider: 'github' | 'google') {
   authError.value = ''
   try {
     console.log('[signInWith] Requesting social sign-in for:', provider)
-    const result = await authClient.signIn.social({ provider, callbackURL: '/' })
+    const result = await authClient.signIn.social({ provider, callbackURL: '/', disableRedirect: true })
     console.log('[signInWith] Response result:', result)
 
     if (result?.error) {

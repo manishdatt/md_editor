@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import type { BetterAuth } from 'better-auth'
-import type { H3Event } from 'h3'
+import { getRequestHeader, type H3Event } from 'h3'
 import { ensureSchema, getDb } from './utils/database'
 import { user, session, account, verification } from './db/schema'
 
@@ -31,8 +31,17 @@ export async function getAuth(event?: H3Event): Promise<BetterAuth> {
     }
   }
 
+  let requestOrigin = ''
+  if (event) {
+    const host = getRequestHeader(event, 'x-forwarded-host') || getRequestHeader(event, 'host')
+    const proto = getRequestHeader(event, 'x-forwarded-proto') || 'https'
+    if (host) {
+      requestOrigin = `${proto}://${host}`
+    }
+  }
+
   const secret = cfEnv.BETTER_AUTH_SECRET || cfEnv.NUXT_BETTER_AUTH_SECRET || (config.betterAuthSecret as string) || process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-session-key-must-be-min-32-chars-long'
-  const baseURL = cfEnv.BETTER_AUTH_URL || cfEnv.NUXT_BETTER_AUTH_URL || (config.betterAuthUrl as string) || process.env.BETTER_AUTH_URL || (config.public?.siteUrl as string) || 'https://shbd.bioinfo.guru'
+  const baseURL = requestOrigin || cfEnv.BETTER_AUTH_URL || cfEnv.NUXT_BETTER_AUTH_URL || (config.betterAuthUrl as string) || process.env.BETTER_AUTH_URL || (config.public?.siteUrl as string) || 'https://shbd.bioinfo.guru'
 
   return betterAuth({
     baseURL,
