@@ -131,8 +131,10 @@ export async function ensureSchema(event?: H3Event) {
         }
 
         console.info('[auth-db] database schema ready', {
-          accountIssuer: hasIssuer || true,
-          documentsFormat: hasFormat || true
+          accountIssuerPresentBeforeUpgrade: hasIssuer,
+          accountIssuerUpgradeAttempted: !hasIssuer,
+          documentsFormatPresentBeforeUpgrade: hasFormat,
+          documentsFormatUpgradeAttempted: !hasFormat
         })
       } catch (err) {
         console.error('[auth-db] schema initialization failed; continuing with existing schema', err)

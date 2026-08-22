@@ -1,4 +1,4 @@
-import { toWebRequest } from 'h3'
+import { getRequestURL, toWebRequest } from 'h3'
 import { getAuth } from '../../auth'
 
 export default defineEventHandler(async (event) => {
