@@ -2,20 +2,23 @@ import { getRequestURL, toWebRequest } from 'h3'
 import { getAuth } from '../../auth'
 
 export default defineEventHandler(async (event) => {
-  const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || {}
-  const requestURL = getRequestURL(event)
-  const request = toWebRequest(event)
-
-  console.info('[auth] request received', {
-    method: request.method,
-    pathname: requestURL.pathname,
-    origin: requestURL.origin,
-    hasCookie: request.headers.has('cookie'),
-    contentType: request.headers.get('content-type'),
-    cfEnvKeys: Object.keys(cfEnv).filter((key) => /^(GOOGLE|GITHUB|TURSO|BETTER_AUTH)/.test(key))
-  })
+  const traceId = globalThis.crypto?.randomUUID?.() || `auth-${Date.now().toString(36)}`
 
   try {
+    const cfEnv = (event?.context?.cloudflare?.env as Record<string, string | undefined>) || {}
+    const requestURL = getRequestURL(event)
+    const request = toWebRequest(event)
+
+    console.info('[auth] request received', {
+      traceId,
+      method: request.method,
+      pathname: requestURL.pathname,
+      origin: requestURL.origin,
+      hasCookie: request.headers.has('cookie'),
+      contentType: request.headers.get('content-type'),
+      cfEnvKeys: Object.keys(cfEnv).filter((key) => /^(GOOGLE|GITHUB|TURSO|BETTER_AUTH)/.test(key))
+    })
+
     const auth = await getAuth(event)
     const response = await auth.handler(request)
 
@@ -29,25 +32,54 @@ export default defineEventHandler(async (event) => {
       try {
         const body = await cloned.json()
         console.error('[auth] handler error response', {
+          traceId,
           status: response.status,
           body
         })
+
+        if (response.status >= 500) {
+          return new Response(JSON.stringify({
+            message: body?.message || 'Authentication provider request failed',
+            code: body?.code,
+            traceId
+          }), {
+            status: response.status,
+            headers: { 'content-type': 'application/json' }
+          })
+        }
       } catch {
         const text = await cloned.text()
         console.error('[auth] handler error response text', {
+          traceId,
           status: response.status,
           text: text.slice(0, 1000)
         })
+
+        if (response.status >= 500) {
+          return new Response(JSON.stringify({
+            message: 'Authentication provider request failed',
+            traceId
+          }), {
+            status: response.status,
+            headers: { 'content-type': 'application/json' }
+          })
+        }
       }
     }
 
     return response
   } catch (error: any) {
-    console.error('[auth] unhandled error:', error?.stack || error)
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'Authentication server error',
-      data: import.meta.dev ? { message: error?.message || String(error) } : undefined
+    console.error('[auth] unhandled error', {
+      traceId,
+      message: error?.message || String(error),
+      stack: error?.stack
+    })
+    return new Response(JSON.stringify({
+      message: 'Authentication server error',
+      traceId
+    }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' }
     })
   }
 })
