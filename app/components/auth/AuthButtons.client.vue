@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
 
-const { data: session } = authClient.useSession()
+const sessionState = authClient.useSession()
 
 function signInWith(provider: 'github' | 'google') {
   authClient.signIn.social({ provider, callbackURL: '/' })
@@ -14,7 +14,7 @@ function signOut() {
 
 <template>
   <div class="flex items-center gap-2">
-    <template v-if="!session">
+    <template v-if="!sessionState.data?.user">
       <button
         type="button"
         class="rounded-md border border-neutral-300 px-3 py-1 text-sm dark:border-neutral-700"
@@ -33,7 +33,7 @@ function signOut() {
 
     <template v-else>
       <span class="text-sm text-neutral-600 dark:text-neutral-300">
-        {{ session.user.name || session.user.email }}
+        {{ sessionState.data.user.name || sessionState.data.user.email }}
       </span>
       <button
         type="button"

@@ -53,10 +53,10 @@ let activeSave: Promise<void> | null = null
 let activeModeKey = ''
 let onThemeChanged: (() => void) | null = null
 
-const { data: authSession, isPending } = authClient.useSession()
-const isLoaded = computed(() => !isPending.value)
-const isSignedIn = computed(() => Boolean(authSession.value?.user))
-const userId = computed(() => authSession.value?.user?.id ?? '')
+const sessionState = authClient.useSession()
+const isLoaded = computed(() => !sessionState.value?.isPending)
+const isSignedIn = computed(() => Boolean(sessionState.value?.data?.user))
+const userId = computed(() => sessionState.value?.data?.user?.id ?? '')
 const { renderToHtml, renderMermaidIn } = useMarkdownRenderer()
 
 const canExportPdf = computed(() => {
