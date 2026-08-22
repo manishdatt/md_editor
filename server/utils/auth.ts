@@ -13,7 +13,7 @@ export type AuthenticatedUser = {
 }
 
 export async function requireAuthenticatedUser(event: H3Event): Promise<AuthenticatedUser> {
-  const auth = await getAuth()
+  const auth = await getAuth(event)
   const result = await auth.api.getSession({ headers: event.headers })
   const sessionUser = (result as any)?.user ?? (result as any)?.session?.user
   if (!sessionUser) {
