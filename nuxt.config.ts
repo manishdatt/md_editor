@@ -24,6 +24,13 @@ export default defineNuxtConfig({
         { property: 'og:type', content: 'website' },
         { property: 'og:site_name', content: 'shbd' },
         { name: 'twitter:card', content: 'summary' }
+      ],
+      // Tailwind Play CDN (preflight disabled) so utility classes authored inside
+      // raw-HTML blocks style correctly at runtime. Build-time Tailwind only scans
+      // source files, so dynamically inserted HTML needs a runtime generator.
+      script: [
+        { innerHTML: 'window.tailwind={config:{corePlugins:{preflight:false}}};', tagPosition: 'head' },
+        { src: 'https://cdn.tailwindcss.com', tagPosition: 'head' }
       ]
     }
   },

@@ -10,6 +10,7 @@ import { CodeBlockShiki } from '~/extensions/codeBlockShiki'
 import { MarkdownTableBlock } from '~/extensions/markdownTableBlock'
 import { MermaidBlock } from '~/extensions/mermaidBlock'
 import { SvgBlock } from '~/extensions/svgBlock'
+import { HtmlBlock } from '~/extensions/htmlBlock'
 import { RawHtmlText } from '~/extensions/rawHtmlText'
 import { AiGhostText } from '~/extensions/aiGhostText'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
@@ -494,6 +495,15 @@ function insertSvgBlock() {
   }).run()
 }
 
+function insertHtmlBlock() {
+  editor.value?.chain().focus().insertContent({
+    type: 'htmlBlock',
+    attrs: {
+      html: '<div style="display:flex;gap:8px">\n  <div style="flex:1;padding:8px;background:#e5e7eb;border-radius:6px">Column A</div>\n  <div style="flex:1;padding:8px;background:#e5e7eb;border-radius:6px">Column B</div>\n</div>'
+    }
+  }).run()
+}
+
 function insertParagraphBelowCurrentBlock() {
   editor.value?.chain().focus().command(({ state, dispatch }) => {
     const { $from } = state.selection
@@ -664,9 +674,10 @@ function initializeEditor() {
           breaks: false
         }
       }),
-      RawHtmlText,
-      SvgBlock,
-      CodeBlockShiki,
+  RawHtmlText,
+  SvgBlock,
+  HtmlBlock,
+  CodeBlockShiki,
       MarkdownTableBlock,
       MermaidBlock,
       AiGhostText,
@@ -1079,6 +1090,13 @@ watch([isLoaded, isSignedIn, userId], async () => {
             @click="insertSvgBlock"
           >
             SVG
+          </button>
+          <button
+            type="button"
+            class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
+            @click="insertHtmlBlock"
+          >
+            HTML
           </button>
           <button
             type="button"

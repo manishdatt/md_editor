@@ -1,5 +1,6 @@
 import { useShikiHighlighter } from '~/composables/useShikiHighlighter.client'
 import { normalizeHardBreaks, restoreMarkdownSyntax } from '~/utils/markdownAlignment'
+import { sanitizeHtml } from '~/utils/sanitizeHtml'
 
 let mermaidInstancePromise: Promise<any> | null = null
 
@@ -64,6 +65,13 @@ function emojifyText(value: string) {
     const key = name.toLowerCase()
     return emojiShortcodes[key] || full
   })
+}
+
+// Quarto raw-HTML fence (` ```{=html} `) and a simpler `rawhtml` alias render
+// their body as live HTML instead of a highlighted code block.
+function isRawHtmlFence(language: string): boolean {
+  const lang = String(language || '').trim().toLowerCase()
+  return lang === '{=html}' || lang === 'rawhtml' || lang === 'htmlraw'
 }
 
 const ALIGN_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
@@ -141,16 +149,9 @@ export function useMarkdownRenderer() {
     const { marked } = await import('marked')
     const renderer = new marked.Renderer()
 
-    // Pre-import DOMPurify only when an svg fence exists so regular documents
-    // don't pay the module cost. SVG content comes from the document author
-    // (or, on shared pages, an untrusted author), so it must be sanitized
-    // before reaching the DOM.
-    const needsSvgSanitizer = /^```svg\s*$/im.test(markdown)
-    let sanitize: ((svg: string) => string) | null = null
-    if (needsSvgSanitizer) {
-      const DOMPurify = (await import('dompurify')).default
-      sanitize = (svg: string) => DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
-    }
+    // HTML (including raw fences / inline HTML) is sanitized by DOMPurify at the
+    // end of the pipeline. The svg fence reuses the same sanitizer.
+    const sanitize = sanitizeHtml
 
     // Only load the (heavy) Shiki highlighter when the document actually has a
     // fenced code block. Loading it unconditionally blocked rendering for docs
@@ -171,27 +172,27 @@ export function useMarkdownRenderer() {
       }
 
       if (language === 'svg') {
-        return `<div class="svg-block">${sanitize ? sanitize(source) : escapeHtml(source)}</div>`
+        return `<div class="svg-block">${sanitize(source)}</div>`
+      }
+
+      // Quarto-style raw HTML fence: emit the body as live (sanitized) HTML
+      // rather than a highlighted code block.
+      if (isRawHtmlFence(language)) {
+        return sanitize(source)
       }
 
       // highlightCode returns escaped HTML when the highlighter isn't ready.
       return highlightCode(source, normalizeLanguage(language || 'text'), options?.themeMode || 'auto')
     }
 
+    // Raw HTML in markdown (inline tags or blocks) is passed through verbatim;
+    // the whole document is sanitized by DOMPurify at the end of renderToHtml,
+    // which keeps safe formatting/markup (divs, spans, style, class) while
+    // stripping scripts and event handlers. Alignment wrappers and <br> from
+    // blank lines are preserved by the same sanitizer.
     renderer.html = (token: any) => {
       const html = typeof token === 'string' ? token : String(token?.text || '')
-      // Allow only alignment wrappers we emit ourselves; everything else is escaped
-      // to keep the public share surface safe.
-      if (/^<(p|h[1-6]) style="text-align:(left|center|right)">[\s\S]*<\/\1>$/.test(html.trim())) {
-        return html
-      }
-      // Allow <br> (and runs of them from consecutive blank lines) so Shift+Enter
-      // blank lines render on the preview and shared pages. <br> has no attributes,
-      // so it is safe to pass through unchanged.
-      if (/^(?:<br\s*\/?>\s*)+$/i.test(html.trim())) {
-        return html
-      }
-      return escapeHtml(html)
+      return html
     }
 
     if (options?.hardenLinks) {
@@ -223,7 +224,7 @@ export function useMarkdownRenderer() {
     const alignedMarkdown = applyAlignmentMarkers(restoreMarkdownSyntax(markdown), marked, options?.hardenLinks ? renderer : undefined)
     const finalMarkdown = normalizeHardBreaks(alignedMarkdown)
 
-    return String(marked.parse(finalMarkdown, {
+    const rawHtml = String(marked.parse(finalMarkdown, {
       gfm: true,
       breaks: false,
       renderer,
@@ -233,6 +234,11 @@ export function useMarkdownRenderer() {
         }
       }
     }))
+
+    // Sanitize the full document (raw HTML fences, inline HTML, alignment
+    // wrappers, <br>) in one pass. DOMPurify keeps safe markup and strips
+    // anything dangerous before it reaches the DOM.
+    return sanitizeHtml(rawHtml)
   }
 
   async function renderMermaidIn(element: HTMLElement) {
