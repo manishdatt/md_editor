@@ -666,13 +666,14 @@ function initializeEditor() {
         }
       }),
       HardBreak.extend({
-        // Serialize a hard break as a Markdown-native break (two trailing
-        // spaces + newline). markdown-it parses this as a `br` token (a real
-        // `hardBreak` node), and `marked` renders it as `<br>` in the preview.
+        // Serialize a hard break as a Markdown-native break: a backslash
+        // followed by a newline. Unlike two trailing spaces (which markdown-it
+        // only treats as a break when there is text *before* it on the same
+        // line), a backslash break works even at the start of a line, so a
+        // Shift+Enter round-trips reliably in both the editor and the preview.
         // Using an HTML `<br>` instead collides with the inline-HTML handling
-        // (RawHtmlText) which captures it as literal text, so Shift+Enter would
-        // round-trip as visible "<br>" and break alignment on refresh.
-        renderMarkdown: () => '  \n'
+        // (RawHtmlText) which captures it as literal text.
+        renderMarkdown: () => '\\\n'
       }),
       Markdown.configure({
         markedOptions: {

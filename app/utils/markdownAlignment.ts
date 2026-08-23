@@ -30,29 +30,35 @@ export function normalizeHardBreaks(markdown: string): string {
       continue
     }
     // Paragraph separator — keep intact (prevents runaway <br> growth).
-    if (line === '') {
-      out.push('')
-      continue
-    }
-    const t = line.trim()
-    // A line that is only <br> token(s): a standalone break. Drop it when it
-    // sits immediately after a code fence — that is a serialization artifact of
-    // inserting an atom block (svg/html/mermaid), never intentional.
-    if (/^(?:<br\s*\/?>\s*)+$/i.test(t)) {
-      if (/^```\s*$/.test(out[out.length - 1] || '')) {
+      if (line === '') {
+        out.push('')
         continue
       }
-      const count = (t.match(/<br>/gi) || []).length
-      for (let k = 0; k < count; k++) {
-        out.push('<br>')
+      const t = line.trim()
+      // A line that is only <br> token(s): a standalone break. Drop it when it
+      // sits immediately after a code fence — that is a serialization artifact of
+      // inserting an atom block (svg/html/mermaid), never intentional.
+      if (/^(?:<br\s*\/?>\s*)+$/i.test(t)) {
+        if (/^```\s*$/.test(out[out.length - 1] || '')) {
+          continue
+        }
+        const count = (t.match(/<br>/gi) || []).length
+        for (let k = 0; k < count; k++) {
+          out.push('<br>')
+        }
+        continue
       }
-      continue
-    }
-    // Legacy blank-line breaks: whitespace-only line or a lone backslash.
-    if (t === '' || t === '\\') {
-      out.push('<br>')
-      continue
-    }
+      // Whitespace-only line: only a real Markdown hard break (two or more
+      // trailing spaces) is preserved; any other whitespace-only line is a
+      // legacy artifact and is dropped. (We keep the raw spaces rather than emit
+      // `<br>` so the editor parses it back as a hard break instead of literal
+      // `<br>` text.)
+      if (t === '') {
+        if (/\s{2,}$/.test(line)) {
+          out.push(line)
+        }
+        continue
+      }
     // Line starting with one or more <br>: emit the breaks on their own lines so
     // any block-level markdown after them (headings, lists) keeps its block
     // status instead of being glued onto the break (e.g. `<br>### Heading`).
@@ -147,9 +153,14 @@ export function parseAlignment(markdown: string): { clean: string, directives: A
     if (/^&lt;br\s*\/?&gt;$/i.test(trimmed)) {
       continue
     }
-    // Whitespace-only line is a legacy artifact (older saves used trailing
-    // spaces); a genuinely empty line is a paragraph separator and is kept.
+    // Whitespace-only line: a Markdown hard break (Shift+Enter) serializes as a
+    // line ending in two or more spaces, which is only whitespace. Keep those as
+    // real blocks so the break survives the round-trip; other whitespace-only
+    // lines are legacy artifacts and are dropped.
     if (trimmed === '' && line !== '') {
+      if (/\s{2,}$/.test(line)) {
+        startBlock(line)
+      }
       continue
     }
     // Standalone real break (`<br>`) is a genuine Shift+Enter break — keep it as
