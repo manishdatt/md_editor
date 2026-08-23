@@ -216,9 +216,14 @@ export function useMarkdownRenderer() {
       }
     }
 
-    const alignedMarkdown = applyAlignmentMarkers(restoreMarkdownSyntax(normalizeHardBreaks(markdown)), marked, options?.hardenLinks ? renderer : undefined)
+    // Wrap aligned blocks BEFORE normalizeHardBreaks: the marker's separator
+    // blank line must stay empty so the whole block is gathered into one
+    // wrapper. Running normalize first would turn that blank line into `<br>`
+    // and split the aligned block, dropping its alignment.
+    const alignedMarkdown = applyAlignmentMarkers(restoreMarkdownSyntax(markdown), marked, options?.hardenLinks ? renderer : undefined)
+    const finalMarkdown = normalizeHardBreaks(alignedMarkdown)
 
-    return String(marked.parse(alignedMarkdown, {
+    return String(marked.parse(finalMarkdown, {
       gfm: true,
       breaks: false,
       renderer,
