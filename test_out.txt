@@ -1,0 +1,20 @@
+markdown mgr? true parse? function
+HEADING attrs: {"textAlign":"center","level":2} type: heading
+SERIALIZED:
+<!-- align:center -->
+## Introduction to Python Web Apps
+
+Build web apps with Python. <br>
+
+Use Flask, FastAPI, or Django for backends.
+
+&lt;br&gt;
+Start here with a Shift+Enter at the start of a line.&lt;br&gt;
+Another break at start, then \[link\](https://example.com).
+
+---
+TEST-SIDE heading attrs: {"textAlign":"center","level":2} type: heading
+RELOAD1: heading centered? true | total breaks? 3 | start-of-line break? false
+RELOAD2: heading centered? true | total breaks? 3 | start-of-line break? false
+RAW round-trip: start-of-line break? false | total breaks? 2
+RESULT: PASS

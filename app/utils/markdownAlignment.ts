@@ -35,43 +35,45 @@ export function normalizeHardBreaks(markdown: string): string {
         continue
       }
       const t = line.trim()
-      // A line that is only <br> token(s): a standalone break. Drop it when it
-      // sits immediately after a code fence — that is a serialization artifact of
-      // inserting an atom block (svg/html/mermaid), never intentional.
+      // A line that is only <br> token(s): a standalone break. Never leave it on
+      // its own line — the markdown-it HTML-block parser drops a lone `<br>` block
+      // and `RawHtmlText` can't place a bare `hardBreak` node. Glue it onto the
+      // previous non-empty line as a trailing inline break (which round-trips
+      // reliably). Drop it when it sits immediately after a code fence.
       if (/^(?:<br\s*\/?>\s*)+$/i.test(t)) {
         if (/^```\s*$/.test(out[out.length - 1] || '')) {
           continue
         }
         const count = (t.match(/<br>/gi) || []).length
-        for (let k = 0; k < count; k++) {
-          out.push('<br>')
+        // Glue onto the last non-empty line (skipping any blank separator lines
+        // between the break and the previous block) so the break stays inline.
+        let li = out.length - 1
+        while (li >= 0 && out[li] === '') li--
+        if (li >= 0) {
+          out[li] = out[li] + '<br>'.repeat(count)
+        } else {
+          for (let k = 0; k < count; k++) {
+            out.push('<br>')
+          }
         }
         continue
       }
       // Whitespace-only line: only a real Markdown hard break (two or more
       // trailing spaces) is preserved; any other whitespace-only line is a
-      // legacy artifact and is dropped. (We keep the raw spaces rather than emit
-      // `<br>` so the editor parses it back as a hard break instead of literal
-      // `<br>` text.)
+      // legacy artifact and is dropped.
       if (t === '') {
         if (/\s{2,}$/.test(line)) {
           out.push(line)
         }
         continue
       }
-    // Line starting with one or more <br>: emit the breaks on their own lines so
-    // any block-level markdown after them (headings, lists) keeps its block
-    // status instead of being glued onto the break (e.g. `<br>### Heading`).
+    // Line starting with one or more <br>: keep the break glued to the rest of
+    // the line (inline) so it parses as a real break instead of a dropped block.
     const leading = t.match(/^(?:<br\s*\/?>\s*)+/i)
     if (leading) {
       const count = (leading[0].match(/<br>/gi) || []).length
-      for (let k = 0; k < count; k++) {
-        out.push('<br>')
-      }
       const rest = line.slice(leading[0].length)
-      if (rest.trim() !== '') {
-        out.push(rest)
-      }
+      out.push('<br>'.repeat(count) + rest)
       continue
     }
     out.push(line)
@@ -93,7 +95,10 @@ export function docToMarkdownWithAlignment(editor: Editor): string {
     const md = manager.renderNodeToMarkdown(node.toJSON())
     const align = (node.attrs?.textAlign as string | undefined) || ''
     if (align && align !== 'left' && (ALIGN_VALUES as readonly string[]).includes(align)) {
-      blocks.push(`<!-- align:${align} -->\n\n${md}`)
+      // No blank line between the marker and the block: a leading blank line
+      // would become a spurious block-0 in the editor, shifting the alignment
+      // directive onto the wrong block (centering lost on refresh).
+      blocks.push(`<!-- align:${align} -->\n${md}`)
     } else {
       blocks.push(md)
     }
@@ -148,9 +153,12 @@ export function parseAlignment(markdown: string): { clean: string, directives: A
     }
 
     const trimmed = line.trim()
-    // Stored as literal text (HTML-escaped by the serializer when typed/pasted)
-    // — an artifact, never intentional. Drop it so it doesn't show in the editor.
+    // HTML-escaped form of a Shift+Enter break. The markdown serializer escapes a
+    // leading `<br>` to `&lt;br&gt;`, so on load this is a real break, not literal
+    // text. Restore it to a `<br>` line (kept, but not counted as a top-level
+    // block) so `normalizeHardBreaks` can glue it and round-trip it.
     if (/^&lt;br\s*\/?&gt;$/i.test(trimmed)) {
+      cleaned.push('<br>')
       continue
     }
     // Whitespace-only line: a Markdown hard break (Shift+Enter) serializes as a
@@ -163,11 +171,12 @@ export function parseAlignment(markdown: string): { clean: string, directives: A
       }
       continue
     }
-    // Standalone real break (`<br>`) is a genuine Shift+Enter break — keep it as
-    // a block so the hard break survives the round-trip, and let a pending
-    // marker attach to it.
+    // Standalone real break (`<br>`): a genuine Shift+Enter break. Keep the line
+    // (so `normalizeHardBreaks` can glue it to an adjacent line and round-trip
+    // it as an inline break) but do NOT count it as a top-level block — otherwise
+    // the alignment directive indices shift and centering is lost.
     if (!fence && /^<br\s*\/?>$/i.test(trimmed)) {
-      startBlock(line)
+      cleaned.push(line)
       continue
     }
 

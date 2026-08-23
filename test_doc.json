@@ -1,0 +1,67 @@
+{
+ "type": "doc",
+ "content": [
+  {
+   "type": "heading",
+   "attrs": {
+    "textAlign": "center",
+    "level": 2
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Introduction to Python Web Apps"
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "attrs": {
+    "textAlign": null
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Build web apps with Python. "
+    },
+    {
+     "type": "hardBreak"
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "attrs": {
+    "textAlign": null
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Use Flask, FastAPI, or Django for backends."
+    },
+    {
+     "type": "hardBreak"
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "attrs": {
+    "textAlign": null
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Start here with a Shift+Enter at the start of a line."
+    },
+    {
+     "type": "hardBreak"
+    },
+    {
+     "type": "text",
+     "text": "\nAnother break at start, then link."
+    }
+   ]
+  }
+ ]
+}
