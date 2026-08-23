@@ -2,6 +2,7 @@
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
+import TextAlign from '@tiptap/extension-text-align'
 import { TextSelection } from '@tiptap/pm/state'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { CodeBlockShiki } from '~/extensions/codeBlockShiki'
@@ -11,6 +12,7 @@ import { SvgBlock } from '~/extensions/svgBlock'
 import { RawHtmlText } from '~/extensions/rawHtmlText'
 import { AiGhostText } from '~/extensions/aiGhostText'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
+import { docToMarkdownWithAlignment, parseAlignment, applyAlignmentDirectives } from '~/utils/markdownAlignment'
 import { authClient } from '~/lib/auth-client'
 
 type DocumentFormat = 'markdown' | 'typst'
@@ -130,6 +132,10 @@ async function loadDocument(id: string) {
   title.value = response.document.title
   docFormat.value = response.document.format === 'typst' ? 'typst' : 'markdown'
   typstError.value = ''
+
+  // Keep the raw (marker-annotated) markdown for the preview; the editor gets a
+  // cleaned copy with alignment re-applied as node attributes.
+  const { clean, directives } = parseAlignment(response.document.content)
   markdown.value = response.document.content
 
   // Share state for the newly opened document
@@ -142,9 +148,10 @@ async function loadDocument(id: string) {
   // Typst source must never pass through the TipTap editor: its markdown
   // serializer would rewrite (and corrupt) the .typ syntax.
   if (editor.value && docFormat.value === 'markdown') {
-    editor.value.commands.setContent(markdown.value, {
+    editor.value.commands.setContent(clean, {
       contentType: 'markdown'
     })
+    applyAlignmentDirectives(editor.value, directives)
   }
 
   if (docFormat.value === 'markdown') {
@@ -582,7 +589,9 @@ async function onMarkdownFileSelected(event: Event) {
   }
 
   if (editor.value) {
-    editor.value.commands.setContent(content, { contentType: 'markdown' })
+    const { clean, directives } = parseAlignment(content)
+    editor.value.commands.setContent(clean, { contentType: 'markdown' })
+    applyAlignmentDirectives(editor.value, directives)
   }
 
   if (isAuthenticatedMode.value && currentDocId.value) {
@@ -616,6 +625,22 @@ function downloadSource() {
   URL.revokeObjectURL(url)
 }
 
+function setLink() {
+  if (!editor.value) {
+    return
+  }
+  const previous = editor.value.getAttributes('link').href as string | undefined
+  const href = window.prompt('Link URL', previous || 'https://')
+  if (href === null) {
+    return
+  }
+  if (href.trim() === '') {
+    editor.value.chain().focus().extendMarkRange('link').unsetLink().run()
+    return
+  }
+  editor.value.chain().focus().extendMarkRange('link').setLink({ href: href.trim() }).run()
+}
+
 function initializeEditor() {
   editor.value = new Editor({
     contentType: 'markdown',
@@ -636,7 +661,12 @@ function initializeEditor() {
       CodeBlockShiki,
       MarkdownTableBlock,
       MermaidBlock,
-      AiGhostText
+      AiGhostText,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+        alignments: ['left', 'center', 'right'],
+        defaultAlignment: 'left'
+      })
     ],
     editorProps: {
       transformPastedHTML: () => '',
@@ -652,17 +682,17 @@ function initializeEditor() {
         return true
       }
     },
-    onUpdate: ({ editor: current }) => {
-      markdown.value = current.getMarkdown()
-      if (isAuthenticatedMode.value) {
-        scheduleSave(markdown.value)
-      } else {
-        publicDraftTitle.value = title.value
-        publicDraftMarkdown.value = markdown.value
-        saveState.value = 'idle'
-      }
-      void refreshPreview()
+  onUpdate: ({ editor: current }) => {
+    markdown.value = docToMarkdownWithAlignment(current)
+    if (isAuthenticatedMode.value) {
+      scheduleSave(markdown.value)
+    } else {
+      publicDraftTitle.value = title.value
+      publicDraftMarkdown.value = markdown.value
+      saveState.value = 'idle'
     }
+    void refreshPreview()
+  }
   })
 }
 
@@ -685,7 +715,9 @@ async function initializePublicMode() {
   }
 
   if (editor.value) {
-    editor.value.commands.setContent(markdown.value, { contentType: 'markdown' })
+    const { clean, directives } = parseAlignment(markdown.value)
+    editor.value.commands.setContent(clean, { contentType: 'markdown' })
+    applyAlignmentDirectives(editor.value, directives)
   }
 
   await refreshPreview()
@@ -1065,6 +1097,160 @@ watch([isLoaded, isSignedIn, userId], async () => {
             @click="toggleAiGhost"
           >
             AI
+          </button>
+        </div>
+
+        <div
+          v-if="editor && docFormat === 'markdown'"
+          class="flex flex-wrap items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 p-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+        >
+          <button
+            type="button"
+            class="rounded px-2 py-1 font-semibold hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('bold') ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Bold"
+            @click="editor.chain().focus().toggleBold().run()"
+          >
+            B
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 italic hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('italic') ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Italic"
+            @click="editor.chain().focus().toggleItalic().run()"
+          >
+            I
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 line-through hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('strike') ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Strikethrough"
+            @click="editor.chain().focus().toggleStrike().run()"
+          >
+            S
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 font-mono text-xs hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('code') ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Inline code"
+            @click="editor.chain().focus().toggleCode().run()"
+          >
+            &lt;/&gt;
+          </button>
+
+          <span class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
+
+          <button
+            type="button"
+            class="rounded px-2 py-1 text-xs font-semibold hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('heading', { level: 1 }) ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Heading 1"
+            @click="editor.chain().focus().toggleHeading({ level: 1 }).run()"
+          >
+            H1
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 text-xs font-semibold hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('heading', { level: 2 }) ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Heading 2"
+            @click="editor.chain().focus().toggleHeading({ level: 2 }).run()"
+          >
+            H2
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 text-xs font-semibold hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('heading', { level: 3 }) ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Heading 3"
+            @click="editor.chain().focus().toggleHeading({ level: 3 }).run()"
+          >
+            H3
+          </button>
+
+          <span class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
+
+          <button
+            type="button"
+            class="rounded px-2 py-1 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('bulletList') ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Bullet list"
+            @click="editor.chain().focus().toggleBulletList().run()"
+          >
+            • List
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('orderedList') ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Numbered list"
+            @click="editor.chain().focus().toggleOrderedList().run()"
+          >
+            1. List
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('blockquote') ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Blockquote"
+            @click="editor.chain().focus().toggleBlockquote().run()"
+          >
+            ❝ Quote
+          </button>
+
+          <span class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
+
+          <button
+            type="button"
+            class="rounded px-2 py-1 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive('link') ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Add or edit link"
+            @click="setLink()"
+          >
+            🔗 Link
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 hover:bg-neutral-200 disabled:opacity-50 dark:hover:bg-neutral-800"
+            :class="editor.isActive('link') ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            :disabled="!editor.isActive('link')"
+            title="Remove link"
+            @click="editor.chain().focus().unsetLink().run()"
+          >
+            Unlink
+          </button>
+
+          <span class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
+
+          <button
+            type="button"
+            class="rounded px-2 py-1 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive({ textAlign: 'left' }) ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Align left"
+            @click="editor.chain().focus().setTextAlign('left').run()"
+          >
+            Left
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive({ textAlign: 'center' }) ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Align center"
+            @click="editor.chain().focus().setTextAlign('center').run()"
+          >
+            Center
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            :class="editor.isActive({ textAlign: 'right' }) ? 'bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100' : 'text-neutral-500'"
+            title="Align right"
+            @click="editor.chain().focus().setTextAlign('right').run()"
+          >
+            Right
           </button>
         </div>
 

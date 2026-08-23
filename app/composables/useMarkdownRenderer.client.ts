@@ -65,6 +65,74 @@ function emojifyText(value: string) {
   })
 }
 
+const ALIGN_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
+
+// Convert `<!-- align:X -->` markers (emitted by the editor) into styled block
+// elements so alignment renders in the preview and on shared pages. Inner
+// markdown is rendered to inline HTML first so formatting is preserved.
+function applyAlignmentMarkers(markdown: string, marked: any, renderer?: any): string {
+  const lines = markdown.split('\n')
+  const out: string[] = []
+  let i = 0
+  let pending: string | null = null
+  let fence = false
+
+  while (i < lines.length) {
+    const line = lines[i]
+    if (/^\s*```/.test(line)) {
+      fence = !fence
+    }
+
+    const marker = !fence ? line.match(ALIGN_MARKER_RE) : null
+    if (marker) {
+      pending = marker[1]
+      i += 1
+      continue
+    }
+
+    if (pending) {
+      const blockLines: string[] = []
+      while (i < lines.length) {
+        const cur = lines[i]
+        if (/^\s*```/.test(cur)) {
+          fence = !fence
+        }
+        if (!fence && cur.trim() === '' && blockLines.length > 0) {
+          break
+        }
+        blockLines.push(cur)
+        i += 1
+      }
+      const text = blockLines.join('\n').trim()
+      if (text) {
+        // Never wrap fenced code blocks in an alignment tag.
+        if (text.startsWith('```') || text.startsWith('~~~')) {
+          out.push(text)
+          pending = null
+          continue
+        }
+        const heading = text.match(/^(#{1,6})\s+([\s\S]*)$/)
+        const inlineOptions = renderer ? { renderer, gfm: true } : { gfm: true }
+        if (heading) {
+          const level = heading[1].length
+          const inner = marked.parseInline(heading[2], inlineOptions)
+          out.push(`<h${level} style="text-align:${pending}">${inner}</h${level}>`)
+        } else {
+          const inner = marked.parseInline(text, inlineOptions)
+          out.push(`<p style="text-align:${pending}">${inner}</p>`)
+        }
+      }
+      pending = null
+      continue
+    }
+
+    out.push(line)
+    i += 1
+  }
+
+  return out.join('\n')
+}
+
 export function useMarkdownRenderer() {
   const { ensureHighlighter, highlightCode, normalizeLanguage } = useShikiHighlighter()
 
@@ -111,6 +179,11 @@ export function useMarkdownRenderer() {
 
     renderer.html = (token: any) => {
       const html = typeof token === 'string' ? token : String(token?.text || '')
+      // Allow only alignment wrappers we emit ourselves; everything else is escaped
+      // to keep the public share surface safe.
+      if (/^<(p|h[1-6]) style="text-align:(left|center|right)">[\s\S]*<\/\1>$/.test(html.trim())) {
+        return html
+      }
       return escapeHtml(html)
     }
 
@@ -136,7 +209,9 @@ export function useMarkdownRenderer() {
       }
     }
 
-    return String(marked.parse(markdown, {
+    const alignedMarkdown = applyAlignmentMarkers(markdown, marked, options?.hardenLinks ? renderer : undefined)
+
+    return String(marked.parse(alignedMarkdown, {
       gfm: true,
       breaks: false,
       renderer,
