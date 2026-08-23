@@ -31,7 +31,20 @@ onMounted(() => {
         <span class="text-xs">· shared document</span>
       </div>
 
-      <SharedDocPreview :token="token" @loaded="docTitle = $event" />
+      <ClientOnly>
+        <SharedDocPreview :token="token" @loaded="docTitle = $event" />
+        <template #fallback>
+          <div
+            class="animate-pulse rounded-lg border border-neutral-200 bg-white p-6 sm:p-8 dark:border-neutral-800 dark:bg-neutral-900"
+            aria-label="Loading shared document"
+          >
+            <div class="mb-4 h-7 w-1/2 rounded bg-neutral-200 dark:bg-neutral-800" />
+            <div class="mb-2 h-4 w-full rounded bg-neutral-200 dark:bg-neutral-800" />
+            <div class="mb-2 h-4 w-5/6 rounded bg-neutral-200 dark:bg-neutral-800" />
+            <div class="h-4 w-2/3 rounded bg-neutral-200 dark:bg-neutral-800" />
+          </div>
+        </template>
+      </ClientOnly>
     </main>
   </div>
 </template>
