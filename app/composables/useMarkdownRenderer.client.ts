@@ -1,4 +1,5 @@
 import { useShikiHighlighter } from '~/composables/useShikiHighlighter.client'
+import { normalizeHardBreaks } from '~/utils/markdownAlignment'
 
 let mermaidInstancePromise: Promise<any> | null = null
 
@@ -209,7 +210,7 @@ export function useMarkdownRenderer() {
       }
     }
 
-    const alignedMarkdown = applyAlignmentMarkers(markdown, marked, options?.hardenLinks ? renderer : undefined)
+    const alignedMarkdown = applyAlignmentMarkers(normalizeHardBreaks(markdown), marked, options?.hardenLinks ? renderer : undefined)
 
     return String(marked.parse(alignedMarkdown, {
       gfm: true,

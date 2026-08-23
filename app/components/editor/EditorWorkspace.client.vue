@@ -2,6 +2,7 @@
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
+import HardBreak from '@tiptap/extension-hard-break'
 import TextAlign from '@tiptap/extension-text-align'
 import { TextSelection } from '@tiptap/pm/state'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
@@ -648,7 +649,11 @@ function initializeEditor() {
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({
-        codeBlock: false
+        codeBlock: false,
+        hardBreak: false
+      }),
+      HardBreak.extend({
+        renderMarkdown: () => '\\\n'
       }),
       Markdown.configure({
         markedOptions: {

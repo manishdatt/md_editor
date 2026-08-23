@@ -5,6 +5,27 @@ export type AlignValue = (typeof ALIGN_VALUES)[number]
 
 const MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 
+// TipTap serializes a Shift+Enter on an empty line as a line containing only two
+// spaces ("  \n"). Markdown only treats trailing spaces as a hard break when there
+// is text before them, so a standalone "  " line collapses to nothing in the
+// preview and on reload. Convert such whitespace-only lines (outside fenced code
+// blocks) into a backslash break ("\"), which markdown always renders as <br>.
+export function normalizeHardBreaks(markdown: string): string {
+  const lines = markdown.split('\n')
+  let fence = false
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (/^\s*```/.test(line)) {
+      fence = !fence
+      continue
+    }
+    if (!fence && line.length > 0 && line.trim() === '') {
+      lines[i] = '\\'
+    }
+  }
+  return lines.join('\n')
+}
+
 // Markdown has no native alignment syntax, so aligned blocks are prefixed with
 // a comment marker. This survives the TipTap markdown round-trip (the comment is
 // inert) while `parseAlignment` lets us re-apply the alignment after loading.
@@ -71,7 +92,7 @@ export function parseAlignment(markdown: string): { clean: string, directives: A
     cleaned.push(line)
   }
 
-  return { clean: cleaned.join('\n'), directives }
+  return { clean: normalizeHardBreaks(cleaned.join('\n')), directives }
 }
 
 export function applyAlignmentDirectives(editor: Editor, directives: AlignmentDirective[]): void {
