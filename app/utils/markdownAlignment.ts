@@ -215,10 +215,14 @@ export function applyAlignmentDirectives(editor: Editor, directives: AlignmentDi
       }
       pos += child.nodeSize
     }
+    // Select *inside* the block (its first content position) so `setTextAlign`
+    // reliably targets this node. `setTextNodeSelection(pos)` fails for the
+    // first block because `pos` (0) precedes the text node, which silently
+    // dropped alignment on refresh.
     try {
-      editor.chain().setTextNodeSelection(pos).setTextAlign(align).run()
+      editor.chain().setTextSelection(pos + 1).setTextAlign(align).run()
     } catch {
-      // Ignore failures for individual blocks.
+      // Ignore failures for individual blocks (e.g. atom blocks).
     }
   }
 }
