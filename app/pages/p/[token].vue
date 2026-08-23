@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: 'empty' })
 
 const route = useRoute()
 const token = computed(() => String(route.params.token || ''))
