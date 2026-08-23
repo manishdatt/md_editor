@@ -103,7 +103,10 @@ export interface AlignmentDirective {
 // Remove alignment marker comments and report which top-level block index each
 // directive applies to (0-based, matching the editor document's children).
 export function parseAlignment(markdown: string): { clean: string, directives: AlignmentDirective[] } {
-  const lines = markdown.split('\n')
+  // Un-escape stored literal markup up front (e.g. `&lt;br&gt;` -> `<br>`,
+  // `\[..\]`) so the scan below can recognise artifact break lines and the
+  // real block structure.
+  const lines = restoreMarkdownSyntax(markdown).split('\n')
   const cleaned: string[] = []
   const directives: AlignmentDirective[] = []
   let fence = false
@@ -124,6 +127,14 @@ export function parseAlignment(markdown: string): { clean: string, directives: A
       continue
     }
 
+    // Standalone break line (`<br>` / `<br/>`) is a serialization artifact
+    // (e.g. left behind by inserting an atom block). Dropping it keeps
+    // alignment-directive indices correct and stops literal `<br>` from
+    // appearing in the editor.
+    if (!fence && /^<br\s*\/?>$/i.test(line.trim())) {
+      continue
+    }
+
     if (!fence && line.trim() === '') {
       if (inBlock) {
         inBlock = false
@@ -139,7 +150,7 @@ export function parseAlignment(markdown: string): { clean: string, directives: A
     cleaned.push(line)
   }
 
-  return { clean: restoreMarkdownSyntax(normalizeHardBreaks(cleaned.join('\n'))), directives }
+  return { clean: normalizeHardBreaks(cleaned.join('\n')), directives }
 }
 
 // When raw markdown syntax was typed as literal text (before markdown input
