@@ -1,5 +1,5 @@
 import { useShikiHighlighter } from '~/composables/useShikiHighlighter.client'
-import { normalizeHardBreaks } from '~/utils/markdownAlignment'
+import { normalizeHardBreaks, restoreMarkdownLinks } from '~/utils/markdownAlignment'
 
 let mermaidInstancePromise: Promise<any> | null = null
 
@@ -185,6 +185,12 @@ export function useMarkdownRenderer() {
       if (/^<(p|h[1-6]) style="text-align:(left|center|right)">[\s\S]*<\/\1>$/.test(html.trim())) {
         return html
       }
+      // Allow <br> (and runs of them from consecutive blank lines) so Shift+Enter
+      // blank lines render on the preview and shared pages. <br> has no attributes,
+      // so it is safe to pass through unchanged.
+      if (/^(?:<br\s*\/?>\s*)+$/i.test(html.trim())) {
+        return html
+      }
       return escapeHtml(html)
     }
 
@@ -210,7 +216,7 @@ export function useMarkdownRenderer() {
       }
     }
 
-    const alignedMarkdown = applyAlignmentMarkers(normalizeHardBreaks(markdown), marked, options?.hardenLinks ? renderer : undefined)
+    const alignedMarkdown = applyAlignmentMarkers(restoreMarkdownLinks(normalizeHardBreaks(markdown)), marked, options?.hardenLinks ? renderer : undefined)
 
     return String(marked.parse(alignedMarkdown, {
       gfm: true,

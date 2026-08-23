@@ -650,10 +650,13 @@ function initializeEditor() {
     extensions: [
       StarterKit.configure({
         codeBlock: false,
-        hardBreak: false
+        hardBreak: false,
+        link: {
+          markdownLinks: true
+        }
       }),
       HardBreak.extend({
-        renderMarkdown: () => '\\\n'
+        renderMarkdown: () => '<br>'
       }),
       Markdown.configure({
         markedOptions: {

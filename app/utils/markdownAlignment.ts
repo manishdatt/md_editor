@@ -19,8 +19,15 @@ export function normalizeHardBreaks(markdown: string): string {
       fence = !fence
       continue
     }
-    if (!fence && line.length > 0 && line.trim() === '') {
-      lines[i] = '\\'
+    if (!fence && line.length > 0) {
+      const t = line.trim()
+      // A line that is only whitespace was a Shift+Enter on an empty line
+      // serialized as trailing spaces (older saves). A line that is only a
+      // backslash was the same break serialized as "\"+newline (an earlier
+      // broken fix). Both should render as a line break.
+      if (t === '' || t === '\\') {
+        lines[i] = '<br>'
+      }
     }
   }
   return lines.join('\n')
@@ -92,7 +99,27 @@ export function parseAlignment(markdown: string): { clean: string, directives: A
     cleaned.push(line)
   }
 
-  return { clean: normalizeHardBreaks(cleaned.join('\n')), directives }
+  return { clean: restoreMarkdownLinks(normalizeHardBreaks(cleaned.join('\n'))), directives }
+}
+
+// When raw markdown link syntax `[text](url)` was typed (before markdown link
+// input rules were enabled) TipTap stored it as escaped literal text
+// `\[text\](url)`. Restore it so it parses as a real link on load and in the
+// preview. Only applied outside fenced code blocks.
+export function restoreMarkdownLinks(markdown: string): string {
+  const lines = markdown.split('\n')
+  let fence = false
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (/^\s*```/.test(line)) {
+      fence = !fence
+      continue
+    }
+    if (!fence) {
+      lines[i] = line.replace(/\\\[([^\]]*?)\\\]\(([^)\s]+)\)/g, (_m, text, url) => `[${text}](${url})`)
+    }
+  }
+  return lines.join('\n')
 }
 
 export function applyAlignmentDirectives(editor: Editor, directives: AlignmentDirective[]): void {
