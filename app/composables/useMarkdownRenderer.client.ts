@@ -76,23 +76,16 @@ function isRawHtmlFence(language: string): boolean {
 
 // Split markdown into top-level block chunks (blank-line separated, fence aware).
 // Display-only: used to wrap aligned blocks in styled divs for the preview.
-//
-// IMPORTANT: alignment directives are indexed to Tiptap document children, and
-// an empty paragraph (a user-inserted blank line) serializes to an empty
-// segment (`''`) between the standard '\n\n' separators. To keep chunk indices
-// aligned with Tiptap child indices, empty segments must be PRESERVED: every
-// blank line closes whatever chunk is currently open, even an empty one.
-// Skipping empties drifts every subsequent block's index when blank lines are
-// inserted before an aligned block (the reported "centered heading goes left
-// in preview after adding blank lines" bug).
 function splitTopLevelBlocks(markdown: string): string[] {
   const chunks: string[] = []
   const lines = markdown.split('\n')
   let fence = false
   let current: string[] = []
   const flush = () => {
-    chunks.push(current.join('\n'))
-    current = []
+    if (current.length > 0) {
+      chunks.push(current.join('\n'))
+      current = []
+    }
   }
   for (const line of lines) {
     if (/^\s*```/.test(line)) {
