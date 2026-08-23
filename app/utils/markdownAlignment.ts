@@ -103,39 +103,64 @@ export interface AlignmentDirective {
 // Remove alignment marker comments and report which top-level block index each
 // directive applies to (0-based, matching the editor document's children).
 export function parseAlignment(markdown: string): { clean: string, directives: AlignmentDirective[] } {
-  // Un-escape stored literal markup up front (e.g. `&lt;br&gt;` -> `<br>`,
-  // `\[..\]`) so the scan below can recognise artifact break lines and the
-  // real block structure.
-  const lines = restoreMarkdownSyntax(markdown).split('\n')
+  const rawLines = markdown.split('\n')
   const cleaned: string[] = []
   const directives: AlignmentDirective[] = []
   let fence = false
   let inBlock = false
   let nextRealIndex = 0
+  // A marker defers its target to the *next real block* after it. This makes
+  // alignment robust to any lines (blank lines, breaks) sitting between the
+  // marker and its block — previously those lines shifted the directive onto
+  // the wrong block, so centering was lost on refresh.
+  let pendingAlign: AlignValue | null = null
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+  const startBlock = (line: string) => {
+    const blockIndex = nextRealIndex
+    nextRealIndex += 1
+    if (pendingAlign !== null) {
+      directives.push({ index: blockIndex, align: pendingAlign })
+      pendingAlign = null
+    }
+    inBlock = true
+    cleaned.push(line)
+  }
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i]
     if (/^\s*```/.test(line)) {
       fence = !fence
+      startBlock(line)
+      continue
     }
 
     const marker = !fence ? line.match(MARKER_RE) : null
     if (marker) {
-      // The next real (non-marker) block gets this alignment.
-      directives.push({ index: nextRealIndex, align: marker[1] as AlignValue })
+      pendingAlign = marker[1] as AlignValue
       inBlock = false
       continue
     }
 
-    // Standalone break line (`<br>` / `<br/>`) is a serialization artifact
-    // (e.g. left behind by inserting an atom block). Dropping it keeps
-    // alignment-directive indices correct and stops literal `<br>` from
-    // appearing in the editor.
-    if (!fence && /^<br\s*\/?>$/i.test(line.trim())) {
+    const trimmed = line.trim()
+    // Stored as literal text (HTML-escaped by the serializer when typed/pasted)
+    // — an artifact, never intentional. Drop it so it doesn't show in the editor.
+    if (/^&lt;br\s*\/?&gt;$/i.test(trimmed)) {
+      continue
+    }
+    // Whitespace-only line is a legacy artifact (older saves used trailing
+    // spaces); a genuinely empty line is a paragraph separator and is kept.
+    if (trimmed === '' && line !== '') {
+      continue
+    }
+    // Standalone real break (`<br>`) is a genuine Shift+Enter break — keep it as
+    // a block so the hard break survives the round-trip, and let a pending
+    // marker attach to it.
+    if (!fence && /^<br\s*\/?>$/i.test(trimmed)) {
+      startBlock(line)
       continue
     }
 
-    if (!fence && line.trim() === '') {
+    if (!fence && trimmed === '') {
       if (inBlock) {
         inBlock = false
       }
@@ -143,14 +168,10 @@ export function parseAlignment(markdown: string): { clean: string, directives: A
       continue
     }
 
-    if (!inBlock) {
-      inBlock = true
-      nextRealIndex += 1
-    }
-    cleaned.push(line)
+    startBlock(line)
   }
 
-  return { clean: normalizeHardBreaks(cleaned.join('\n')), directives }
+  return { clean: normalizeHardBreaks(restoreMarkdownSyntax(cleaned.join('\n'))), directives }
 }
 
 // When raw markdown syntax was typed as literal text (before markdown input
