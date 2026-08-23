@@ -666,7 +666,10 @@ function initializeEditor() {
         }
       }),
       HardBreak.extend({
-        renderMarkdown: () => '<br>'
+        // Trailing newline so a hard break ends its line. Without it, a break
+        // glued to following block-level markdown (e.g. `<br>### Heading`)
+        // would stop the heading from parsing.
+        renderMarkdown: () => '<br>\n'
       }),
       Markdown.configure({
         markedOptions: {

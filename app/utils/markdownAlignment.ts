@@ -29,15 +29,43 @@ export function normalizeHardBreaks(markdown: string): string {
       out.push(line)
       continue
     }
-    // Paragraph separator — keep intact.
+    // Paragraph separator — keep intact (prevents runaway <br> growth).
     if (line === '') {
       out.push('')
       continue
     }
     const t = line.trim()
+    // A line that is only <br> token(s): a standalone break. Drop it when it
+    // sits immediately after a code fence — that is a serialization artifact of
+    // inserting an atom block (svg/html/mermaid), never intentional.
+    if (/^(?:<br\s*\/?>\s*)+$/i.test(t)) {
+      if (/^```\s*$/.test(out[out.length - 1] || '')) {
+        continue
+      }
+      const count = (t.match(/<br>/gi) || []).length
+      for (let k = 0; k < count; k++) {
+        out.push('<br>')
+      }
+      continue
+    }
     // Legacy blank-line breaks: whitespace-only line or a lone backslash.
     if (t === '' || t === '\\') {
       out.push('<br>')
+      continue
+    }
+    // Line starting with one or more <br>: emit the breaks on their own lines so
+    // any block-level markdown after them (headings, lists) keeps its block
+    // status instead of being glued onto the break (e.g. `<br>### Heading`).
+    const leading = t.match(/^(?:<br\s*\/?>\s*)+/i)
+    if (leading) {
+      const count = (leading[0].match(/<br>/gi) || []).length
+      for (let k = 0; k < count; k++) {
+        out.push('<br>')
+      }
+      const rest = line.slice(leading[0].length)
+      if (rest.trim() !== '') {
+        out.push(rest)
+      }
       continue
     }
     out.push(line)
@@ -130,6 +158,10 @@ export function restoreMarkdownSyntax(markdown: string): string {
     }
     if (!fence) {
       lines[i] = line.replace(/\\(?=[*_~#[\]()>])/g, '')
+      // Stored literal `<br>` text (HTML-escaped by the markdown serializer when
+      // it was typed/pasted) should round-trip as a real break, not as visible
+      // `<br>` characters.
+      lines[i] = lines[i].replace(/&lt;br\s*\/?&gt;/gi, '<br>')
     }
   }
   return lines.join('\n')
