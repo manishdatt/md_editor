@@ -1,7 +1,0 @@
-## Heading with break
-
-First line. <br>
-
-Second line with break.<br>
-
-Start with a break at the very start of a line.
