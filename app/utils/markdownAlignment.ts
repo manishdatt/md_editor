@@ -5,19 +5,15 @@ export type AlignValue = (typeof ALIGN_VALUES)[number]
 
 const MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 
-// TipTap serializes a Shift+Enter on an empty line as a line containing only two
-// A blank line in markdown is just a block separator and collapses to nothing,
-// so a Shift+Enter on an empty line appears to "do nothing" in the preview.
-// Render such blank lines as a visible hard break. Two legacy cases reach us:
-//   - a line that is only whitespace (older saves serialized the break as
-//     trailing spaces, i.e. "  \n")
-//   - a line that is only a backslash (an earlier broken fix serialized the
-//     break as "\"+newline)
-// We emit "<br>" as its own block FOLLOWED BY a separator blank line. This is
-// critical: a bare "<br>" line is a markdown HTML block that otherwise merges
-// with the following line, swallowing a heading/list/paragraph into one blob.
-// We also split runs of "<br>" and "<br>" prefixes so following blocks keep
-// their block status. Inline "<br>" (e.g. "text<br>text") is left untouched.
+// TipTap serializes a Shift+Enter (hard break) as `<br>`. A few legacy cases
+// reach us as lines that are only whitespace (older saves used trailing spaces)
+// or a lone backslash (a previous broken fix). Turn those into a single `<br>`.
+//
+// IMPORTANT: a *truly empty* line is a paragraph separator and must be left
+// untouched. Converting it to `<br>` would turn every paragraph break into a
+// hard break and, because the editor re-serializes `<br>` as `<br>` on save,
+// the breaks would multiply on every save/load cycle (runaway `<br>` growth in
+// the editor). We also never inject a trailing blank line after `<br>`.
 export function normalizeHardBreaks(markdown: string): string {
   const lines = markdown.split('\n')
   const out: string[] = []
@@ -33,33 +29,15 @@ export function normalizeHardBreaks(markdown: string): string {
       out.push(line)
       continue
     }
-    const t = line.trim()
-    // Whitespace-only line or a lone backslash: a blank-line break.
-    if (t === '' || t === '\\') {
-      out.push('<br>')
+    // Paragraph separator — keep intact.
+    if (line === '') {
       out.push('')
       continue
     }
-    // A line that is only one or more "<br>": split into separate breaks,
-    // each followed by a separator blank line.
-    if (/^(?:<br>\s*)+$/i.test(t)) {
-      const count = (t.match(/<br>/gi) || []).length
-      for (let k = 0; k < count; k++) {
-        out.push('<br>')
-        out.push('')
-      }
-      continue
-    }
-    // A line starting with one or more "<br>" then other content
-    // (e.g. "<br><br>### Heading"): emit the breaks first, then the rest.
-    const leading = t.match(/^(?:<br>\s*)+/i)
-    if (leading) {
-      const count = (leading[0].match(/<br>/gi) || []).length
-      for (let k = 0; k < count; k++) {
-        out.push('<br>')
-        out.push('')
-      }
-      out.push(line.slice(leading[0].length))
+    const t = line.trim()
+    // Legacy blank-line breaks: whitespace-only line or a lone backslash.
+    if (t === '' || t === '\\') {
+      out.push('<br>')
       continue
     }
     out.push(line)
