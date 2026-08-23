@@ -6,31 +6,65 @@ export type AlignValue = (typeof ALIGN_VALUES)[number]
 const MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 
 // TipTap serializes a Shift+Enter on an empty line as a line containing only two
-// spaces ("  \n"). Markdown only treats trailing spaces as a hard break when there
-// is text before them, so a standalone "  " line collapses to nothing in the
-// preview and on reload. Convert such whitespace-only lines (outside fenced code
-// blocks) into a backslash break ("\"), which markdown always renders as <br>.
+// A blank line in markdown is just a block separator and collapses to nothing,
+// so a Shift+Enter on an empty line appears to "do nothing" in the preview.
+// Render such blank lines as a visible hard break. Two legacy cases reach us:
+//   - a line that is only whitespace (older saves serialized the break as
+//     trailing spaces, i.e. "  \n")
+//   - a line that is only a backslash (an earlier broken fix serialized the
+//     break as "\"+newline)
+// We emit "<br>" as its own block FOLLOWED BY a separator blank line. This is
+// critical: a bare "<br>" line is a markdown HTML block that otherwise merges
+// with the following line, swallowing a heading/list/paragraph into one blob.
+// We also split runs of "<br>" and "<br>" prefixes so following blocks keep
+// their block status. Inline "<br>" (e.g. "text<br>text") is left untouched.
 export function normalizeHardBreaks(markdown: string): string {
   const lines = markdown.split('\n')
+  const out: string[] = []
   let fence = false
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (/^\s*```/.test(line)) {
       fence = !fence
+      out.push(line)
       continue
     }
-    if (!fence && line.length > 0) {
-      const t = line.trim()
-      // A line that is only whitespace was a Shift+Enter on an empty line
-      // serialized as trailing spaces (older saves). A line that is only a
-      // backslash was the same break serialized as "\"+newline (an earlier
-      // broken fix). Both should render as a line break.
-      if (t === '' || t === '\\') {
-        lines[i] = '<br>'
-      }
+    if (fence) {
+      out.push(line)
+      continue
     }
+    const t = line.trim()
+    // Whitespace-only line or a lone backslash: a blank-line break.
+    if (t === '' || t === '\\') {
+      out.push('<br>')
+      out.push('')
+      continue
+    }
+    // A line that is only one or more "<br>": split into separate breaks,
+    // each followed by a separator blank line.
+    if (/^(?:<br>\s*)+$/i.test(t)) {
+      const count = (t.match(/<br>/gi) || []).length
+      for (let k = 0; k < count; k++) {
+        out.push('<br>')
+        out.push('')
+      }
+      continue
+    }
+    // A line starting with one or more "<br>" then other content
+    // (e.g. "<br><br>### Heading"): emit the breaks first, then the rest.
+    const leading = t.match(/^(?:<br>\s*)+/i)
+    if (leading) {
+      const count = (leading[0].match(/<br>/gi) || []).length
+      for (let k = 0; k < count; k++) {
+        out.push('<br>')
+        out.push('')
+      }
+      out.push(line.slice(leading[0].length))
+      continue
+    }
+    out.push(line)
   }
-  return lines.join('\n')
+  return out.join('\n')
 }
 
 // Markdown has no native alignment syntax, so aligned blocks are prefixed with
@@ -99,14 +133,15 @@ export function parseAlignment(markdown: string): { clean: string, directives: A
     cleaned.push(line)
   }
 
-  return { clean: restoreMarkdownLinks(normalizeHardBreaks(cleaned.join('\n'))), directives }
+  return { clean: restoreMarkdownSyntax(normalizeHardBreaks(cleaned.join('\n'))), directives }
 }
 
-// When raw markdown link syntax `[text](url)` was typed (before markdown link
-// input rules were enabled) TipTap stored it as escaped literal text
-// `\[text\](url)`. Restore it so it parses as a real link on load and in the
-// preview. Only applied outside fenced code blocks.
-export function restoreMarkdownLinks(markdown: string): string {
+// When raw markdown syntax was typed as literal text (before markdown input
+// rules were enabled, or in pasted content), TipTap escaped the special
+// characters, e.g. `\[text\](url)`, `\*\*bold\*\*`, `\# heading`. Restore those
+// escapes so the syntax parses correctly on load and in the preview. Applied
+// only outside fenced code blocks.
+export function restoreMarkdownSyntax(markdown: string): string {
   const lines = markdown.split('\n')
   let fence = false
   for (let i = 0; i < lines.length; i++) {
@@ -116,7 +151,7 @@ export function restoreMarkdownLinks(markdown: string): string {
       continue
     }
     if (!fence) {
-      lines[i] = line.replace(/\\\[([^\]]*?)\\\]\(([^)\s]+)\)/g, (_m, text, url) => `[${text}](${url})`)
+      lines[i] = line.replace(/\\(?=[*_~#[\]()>])/g, '')
     }
   }
   return lines.join('\n')
