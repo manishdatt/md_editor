@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import SharedDocPreview from '~/components/public/SharedDocPreview.client.vue'
 
 definePageMeta({ layout: 'empty' })
 
