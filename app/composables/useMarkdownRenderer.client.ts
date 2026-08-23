@@ -69,8 +69,6 @@ export function useMarkdownRenderer() {
   const { ensureHighlighter, highlightCode, normalizeLanguage } = useShikiHighlighter()
 
   async function renderToHtml(markdown: string, options?: { themeMode?: 'auto' | 'light' | 'dark', hardenLinks?: boolean }) {
-    await ensureHighlighter()
-
     const { marked } = await import('marked')
     const renderer = new marked.Renderer()
 
@@ -85,6 +83,16 @@ export function useMarkdownRenderer() {
       sanitize = (svg: string) => DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
     }
 
+    // Only load the (heavy) Shiki highlighter when the document actually has a
+    // fenced code block. Loading it unconditionally blocked rendering for docs
+    // with no code (and could hang the public share page on a cold load where
+    // Shiki's wasm/grammar bundle stalls). Warm it, but never let a failure
+    // break rendering — highlightCode degrades to escaped HTML when needed.
+    const hasCodeFence = /^[ \t]*```/m.test(markdown) || /^[ \t]*~~~/m.test(markdown)
+    if (hasCodeFence) {
+      await ensureHighlighter().catch(() => undefined)
+    }
+
     renderer.code = ({ text, lang }: any) => {
       const source = String(text || '')
       const language = String(lang || '').trim().toLowerCase()
@@ -97,6 +105,7 @@ export function useMarkdownRenderer() {
         return `<div class="svg-block">${sanitize ? sanitize(source) : escapeHtml(source)}</div>`
       }
 
+      // highlightCode returns escaped HTML when the highlighter isn't ready.
       return highlightCode(source, normalizeLanguage(language || 'text'), options?.themeMode || 'auto')
     }
 
