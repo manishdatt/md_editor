@@ -1,5 +1,5 @@
 import { useShikiHighlighter } from '~/composables/useShikiHighlighter.client'
-import { normalizeHardBreaks, restoreMarkdownSyntax } from '~/utils/markdownAlignment'
+import { extractAlignment, type AlignmentDirective } from '~/utils/markdownAlignment'
 import { sanitizeHtml } from '~/utils/sanitizeHtml'
 
 let mermaidInstancePromise: Promise<any> | null = null
@@ -74,72 +74,54 @@ function isRawHtmlFence(language: string): boolean {
   return lang === '{=html}' || lang === 'rawhtml' || lang === 'htmlraw'
 }
 
-const ALIGN_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
-
-// Convert `<!-- align:X -->` markers (emitted by the editor) into styled block
-// elements so alignment renders in the preview and on shared pages. Inner
-// markdown is rendered to inline HTML first so formatting is preserved.
-function applyAlignmentMarkers(markdown: string, marked: any, renderer?: any): string {
+// Split markdown into top-level block chunks (blank-line separated, fence aware).
+// Display-only: used to wrap aligned blocks in styled divs for the preview.
+function splitTopLevelBlocks(markdown: string): string[] {
+  const chunks: string[] = []
   const lines = markdown.split('\n')
-  const out: string[] = []
-  let i = 0
-  let pending: string | null = null
   let fence = false
-
-  while (i < lines.length) {
-    const line = lines[i]
+  let current: string[] = []
+  const flush = () => {
+    if (current.length > 0) {
+      chunks.push(current.join('\n'))
+      current = []
+    }
+  }
+  for (const line of lines) {
     if (/^\s*```/.test(line)) {
       fence = !fence
-    }
-
-    const marker = !fence ? line.match(ALIGN_MARKER_RE) : null
-    if (marker) {
-      pending = marker[1]
-      i += 1
+      current.push(line)
       continue
     }
-
-    if (pending) {
-      const blockLines: string[] = []
-      while (i < lines.length) {
-        const cur = lines[i]
-        if (/^\s*```/.test(cur)) {
-          fence = !fence
-        }
-        if (!fence && cur.trim() === '' && blockLines.length > 0) {
-          break
-        }
-        blockLines.push(cur)
-        i += 1
-      }
-      const text = blockLines.join('\n').trim()
-      if (text) {
-        // Never wrap fenced code blocks in an alignment tag.
-        if (text.startsWith('```') || text.startsWith('~~~')) {
-          out.push(text)
-          pending = null
-          continue
-        }
-        const heading = text.match(/^(#{1,6})\s+([\s\S]*)$/)
-        const inlineOptions = renderer ? { renderer, gfm: true } : { gfm: true }
-        if (heading) {
-          const level = heading[1].length
-          const inner = marked.parseInline(heading[2], inlineOptions)
-          out.push(`<h${level} style="text-align:${pending}">${inner}</h${level}>`)
-        } else {
-          const inner = marked.parseInline(text, inlineOptions)
-          out.push(`<p style="text-align:${pending}">${inner}</p>`)
-        }
-      }
-      pending = null
+    if (!fence && line.trim() === '') {
+      flush()
       continue
     }
-
-    out.push(line)
-    i += 1
+    current.push(line)
   }
+  flush()
+  return chunks
+}
 
-  return out.join('\n')
+// Wrap aligned blocks in styled divs for display. This is purely presentational
+// and runs only on the preview input — it NEVER touches persisted content, so
+// it cannot corrupt documents across renders (unlike the previous whole-doc
+// markdown-rewriting pipeline).
+function wrapAlignedBlocks(markdown: string, directives: AlignmentDirective[]): string {
+  if (directives.length === 0) {
+    return markdown
+  }
+  const chunks = splitTopLevelBlocks(markdown)
+  const alignByIndex = new Map(directives.map((d) => [d.index, d.align]))
+  return chunks
+    .map((chunk, index) => {
+      const align = alignByIndex.get(index)
+      if (!align || /^\s*(```|~~~)/.test(chunk)) {
+        return chunk
+      }
+      return `<div style="text-align:${align}">\n\n${chunk}\n\n</div>`
+    })
+    .join('\n\n')
 }
 
 export function useMarkdownRenderer() {
@@ -217,14 +199,14 @@ export function useMarkdownRenderer() {
       }
     }
 
-    // Wrap aligned blocks BEFORE normalizeHardBreaks: the marker's separator
-    // blank line must stay empty so the whole block is gathered into one
-    // wrapper. Running normalize first would turn that blank line into `<br>`
-    // and split the aligned block, dropping its alignment.
-    const alignedMarkdown = applyAlignmentMarkers(restoreMarkdownSyntax(markdown), marked, options?.hardenLinks ? renderer : undefined)
-    const finalMarkdown = normalizeHardBreaks(alignedMarkdown)
+    // Alignments live in a single trailing marker line, stripped by
+    // extractAlignment. Blocks are wrapped for display only; the markdown text
+    // itself is never rewritten for style. (Previous normalize/restore passes
+    // rewrote the whole document and were a corruption source.)
+    const { clean, directives } = extractAlignment(markdown)
+    const displayMarkdown = wrapAlignedBlocks(clean, directives)
 
-    const rawHtml = String(marked.parse(finalMarkdown, {
+    return sanitizeHtml(String(marked.parse(displayMarkdown, {
       gfm: true,
       breaks: false,
       renderer,
@@ -233,12 +215,7 @@ export function useMarkdownRenderer() {
           token.text = emojifyText(token.text)
         }
       }
-    }))
-
-    // Sanitize the full document (raw HTML fences, inline HTML, alignment
-    // wrappers, <br>) in one pass. DOMPurify keeps safe markup and strips
-    // anything dangerous before it reaches the DOM.
-    return sanitizeHtml(rawHtml)
+    })))
   }
 
   async function renderMermaidIn(element: HTMLElement) {

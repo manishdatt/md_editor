@@ -2,7 +2,6 @@
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
-import HardBreak from '@tiptap/extension-hard-break'
 import TextAlign from '@tiptap/extension-text-align'
 import { TextSelection } from '@tiptap/pm/state'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
@@ -14,7 +13,7 @@ import { HtmlBlock } from '~/extensions/htmlBlock'
 import { RawHtmlText } from '~/extensions/rawHtmlText'
 import { AiGhostText } from '~/extensions/aiGhostText'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
-import { docToMarkdownWithAlignment, parseAlignment, applyAlignmentDirectives } from '~/utils/markdownAlignment'
+import { serializeWithAlignment, extractAlignment, applyAlignmentDirectives } from '~/utils/markdownAlignment'
 import { authClient } from '~/lib/auth-client'
 
 type DocumentFormat = 'markdown' | 'typst'
@@ -56,6 +55,10 @@ const typstError = ref('')
 
 const saveTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const pendingMarkdown = ref<string | null>(null)
+// True while programmatically applying document content (load/upload/mode
+// switch). Guards the save path so a mere refresh can never re-serialize and
+// persist content — the corruption loop that degraded documents over reloads.
+const isApplyingContent = ref(false)
 let activeSave: Promise<void> | null = null
 let activeModeKey = ''
 let onThemeChanged: (() => void) | null = null
@@ -135,10 +138,10 @@ async function loadDocument(id: string) {
   docFormat.value = response.document.format === 'typst' ? 'typst' : 'markdown'
   typstError.value = ''
 
-  // Keep the raw (marker-annotated) markdown for the preview; the editor gets a
-  // cleaned copy with alignment re-applied as node attributes.
-  const { clean, directives } = parseAlignment(response.document.content)
-  markdown.value = response.document.content
+  // Alignments live in one trailing marker line; strip it for the editor and
+  // re-apply as node attributes. Everything else passes through byte-for-byte.
+  const { clean, directives } = extractAlignment(response.document.content)
+  markdown.value = clean
 
   // Share state for the newly opened document
   shareToken.value = response.document.shareToken || ''
@@ -150,10 +153,15 @@ async function loadDocument(id: string) {
   // Typst source must never pass through the TipTap editor: its markdown
   // serializer would rewrite (and corrupt) the .typ syntax.
   if (editor.value && docFormat.value === 'markdown') {
-    editor.value.commands.setContent(clean, {
-      contentType: 'markdown'
-    })
-    applyAlignmentDirectives(editor.value, directives)
+    isApplyingContent.value = true
+    try {
+      editor.value.commands.setContent(clean, { contentType: 'markdown' })
+      applyAlignmentDirectives(editor.value, directives)
+    } finally {
+      isApplyingContent.value = false
+    }
+    // Canonical markdown: restored content + (possibly empty) alignment marker
+    markdown.value = serializeWithAlignment(editor.value)
   }
 
   if (docFormat.value === 'markdown') {
@@ -600,9 +608,15 @@ async function onMarkdownFileSelected(event: Event) {
   }
 
   if (editor.value) {
-    const { clean, directives } = parseAlignment(content)
-    editor.value.commands.setContent(clean, { contentType: 'markdown' })
-    applyAlignmentDirectives(editor.value, directives)
+    const { clean, directives } = extractAlignment(content)
+    isApplyingContent.value = true
+    try {
+      editor.value.commands.setContent(clean, { contentType: 'markdown' })
+      applyAlignmentDirectives(editor.value, directives)
+    } finally {
+      isApplyingContent.value = false
+    }
+    markdown.value = serializeWithAlignment(editor.value)
   }
 
   if (isAuthenticatedMode.value && currentDocId.value) {
@@ -660,19 +674,9 @@ function initializeEditor() {
     extensions: [
       StarterKit.configure({
         codeBlock: false,
-        hardBreak: false,
         link: {
           markdownLinks: true
         }
-      }),
-      HardBreak.extend({
-        // Serialize a hard break as an HTML `<br>`. `marked` renders `<br>` as a
-        // break in the preview, and `RawHtmlText` converts any `<br>` token back
-        // into a real `hardBreak` node in the editor. A standalone `<br>` line is
-        // fragile (the markdown serializer HTML-escapes it and the parser drops
-        // the block), so `normalizeHardBreaks` glues every `<br>` onto an adjacent
-        // line so it always parses as an inline break.
-        renderMarkdown: () => '<br>\n'
       }),
       Markdown.configure({
         markedOptions: {
@@ -680,10 +684,10 @@ function initializeEditor() {
           breaks: false
         }
       }),
-  RawHtmlText,
-  SvgBlock,
-  HtmlBlock,
-  CodeBlockShiki,
+      RawHtmlText,
+      SvgBlock,
+      HtmlBlock,
+      CodeBlockShiki,
       MarkdownTableBlock,
       MermaidBlock,
       AiGhostText,
@@ -707,17 +711,23 @@ function initializeEditor() {
         return true
       }
     },
-  onUpdate: ({ editor: current }) => {
-    markdown.value = docToMarkdownWithAlignment(current)
-    if (isAuthenticatedMode.value) {
-      scheduleSave(markdown.value)
-    } else {
-      publicDraftTitle.value = title.value
-      publicDraftMarkdown.value = markdown.value
-      saveState.value = 'idle'
+    onUpdate: ({ editor: current }) => {
+      // Programmatic content application (load/upload/restore) must never
+      // trigger a save: saving on load was the loop that progressively degraded
+      // documents over refreshes.
+      if (isApplyingContent.value) {
+        return
+      }
+      markdown.value = serializeWithAlignment(current)
+      if (isAuthenticatedMode.value) {
+        scheduleSave(markdown.value)
+      } else {
+        publicDraftTitle.value = title.value
+        publicDraftMarkdown.value = markdown.value
+        saveState.value = 'idle'
+      }
+      void refreshPreview()
     }
-    void refreshPreview()
-  }
   })
 }
 
@@ -740,9 +750,15 @@ async function initializePublicMode() {
   }
 
   if (editor.value) {
-    const { clean, directives } = parseAlignment(markdown.value)
-    editor.value.commands.setContent(clean, { contentType: 'markdown' })
-    applyAlignmentDirectives(editor.value, directives)
+    const { clean, directives } = extractAlignment(markdown.value)
+    isApplyingContent.value = true
+    try {
+      editor.value.commands.setContent(clean, { contentType: 'markdown' })
+      applyAlignmentDirectives(editor.value, directives)
+    } finally {
+      isApplyingContent.value = false
+    }
+    markdown.value = serializeWithAlignment(editor.value)
   }
 
   await refreshPreview()
