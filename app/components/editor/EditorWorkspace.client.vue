@@ -64,6 +64,7 @@ const shareOpen = ref(false)
 const shareBusy = ref(false)
 const shareMessage = ref('')
 const shareCopied = ref(false)
+const shareSlug = ref('')
 let shareCopiedTimer: ReturnType<typeof setTimeout> | null = null
 
 const sessionState = authClient.useSession()
@@ -134,6 +135,7 @@ async function loadDocument(id: string) {
   // Share state for the newly opened document
   shareToken.value = response.document.shareToken || ''
   isShared.value = response.document.isShared === true
+  shareSlug.value = isShared.value ? (response.document.shareToken || '') : ''
   shareOpen.value = false
   shareMessage.value = ''
 
@@ -228,9 +230,10 @@ function resetShareState() {
   shareOpen.value = false
   shareMessage.value = ''
   shareBusy.value = false
+  shareSlug.value = ''
 }
 
-async function postShare(enabled: boolean, rotate = false) {
+async function postShare(enabled: boolean, rotate = false, slug?: string) {
   if (!canShare.value || shareBusy.value) {
     return
   }
@@ -239,9 +242,17 @@ async function postShare(enabled: boolean, rotate = false) {
   shareMessage.value = ''
 
   try {
+    const requestBody: { enabled: boolean, rotate?: boolean, slug?: string } = { enabled }
+    if (rotate) {
+      requestBody.rotate = true
+    }
+    if (slug !== undefined && slug.length > 0) {
+      requestBody.slug = slug
+    }
+
     const response = await $fetch<{ isShared: boolean, token: string | null, url: string | null }>(
       `/api/documents/${currentDocId.value}/share`,
-      { method: 'POST', body: { enabled, rotate } }
+      { method: 'POST', body: requestBody }
     )
 
     isShared.value = !!response.isShared
@@ -929,20 +940,51 @@ watch([isLoaded, isSignedIn, userId], async () => {
               {{ shareBusy ? '…' : 'Rotate' }}
             </button>
           </div>
+          <div class="mt-2 flex flex-wrap items-center gap-2 border-t border-neutral-200 pt-2 dark:border-neutral-800">
+            <span class="text-xs text-neutral-500 dark:text-neutral-400">/p/</span>
+            <input
+              v-model="shareSlug"
+              type="text"
+              class="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+            >
+            <button
+              type="button"
+              class="rounded-md border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-neutral-700"
+              title="Change the share link to this custom slug."
+              :disabled="shareBusy"
+              @click="postShare(true, false, shareSlug)"
+            >
+              {{ shareBusy ? '…' : 'Update slug' }}
+            </button>
+          </div>
         </template>
         <template v-else>
           <span class="text-xs text-neutral-500 dark:text-neutral-400">
             Sharing is off. When enabled, anyone with the link can view the rendered document — it updates automatically when you edit.
           </span>
-          <div>
-            <button
-              type="button"
-              class="rounded-md border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-neutral-700"
-              :disabled="shareBusy"
-              @click="postShare(true)"
-            >
-              {{ shareBusy ? '…' : 'Enable share link' }}
-            </button>
+          <div class="flex flex-col gap-2">
+            <label class="text-xs text-neutral-500 dark:text-neutral-400">
+              Custom link (optional)
+            </label>
+            <div class="flex flex-wrap items-center gap-1">
+              <span class="text-xs text-neutral-400">/p/</span>
+              <input
+                v-model="shareSlug"
+                type="text"
+                placeholder="doc1"
+                class="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+              >
+            </div>
+            <div>
+              <button
+                type="button"
+                class="rounded-md border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-neutral-700"
+                :disabled="shareBusy"
+                @click="postShare(true, false, shareSlug)"
+              >
+                {{ shareBusy ? '…' : 'Enable share link' }}
+              </button>
+            </div>
           </div>
         </template>
         <span

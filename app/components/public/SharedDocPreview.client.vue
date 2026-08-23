@@ -19,22 +19,38 @@ const previewRef = ref<HTMLElement | null>(null)
 const { renderToHtml, renderMermaidIn } = useMarkdownRenderer()
 
 onMounted(async () => {
-  state.value = 'loading'
+  // Prefer document already fetched during SSR (serialized in the Nuxt
+  // payload) so we render instantly without a loading skeleton.
+  const initial = useState<PublicDoc | null>(`shared-initial-doc-${props.token}`, () => null)
+  const initialDoc = initial.value
 
-  try {
-    const data = await $fetch<PublicDoc>(`/api/public/doc/${encodeURIComponent(props.token)}`)
-    doc.value = data
-    previewHtml.value = await renderToHtml(data.content, { hardenLinks: true })
-    emit('loaded', data.title)
+  const render = async (docData: PublicDoc) => {
+    doc.value = docData
+    previewHtml.value = await renderToHtml(docData.content, { hardenLinks: true })
+    emit('loaded', docData.title)
     state.value = 'ready'
 
     await nextTick()
     if (previewRef.value) {
       await renderMermaidIn(previewRef.value)
     }
+  }
+
+  if (initialDoc) {
+    await render(initialDoc)
+  }
+
+  // Revalidate against the live API so the view stays current.
+  try {
+    const fresh = await $fetch<PublicDoc>(`/api/public/doc/${encodeURIComponent(props.token)}`)
+    if (!initialDoc || fresh.content !== initialDoc.content || fresh.title !== initialDoc.title) {
+      await render(fresh)
+    }
   } catch (err: any) {
-    const status = err?.response?.status || err?.statusCode || err?.status
-    state.value = status === 404 ? 'notfound' : 'error'
+    if (!initialDoc) {
+      const status = err?.response?.status || err?.statusCode || err?.status
+      state.value = status === 404 ? 'notfound' : 'error'
+    }
   }
 })
 </script>
@@ -76,9 +92,6 @@ onMounted(async () => {
       v-else-if="doc"
       class="rounded-lg border border-neutral-200 bg-white p-6 sm:p-8 dark:border-neutral-800 dark:bg-neutral-900"
     >
-      <h1 class="mb-4 text-2xl font-semibold tracking-tight">
-        {{ doc.title || 'Untitled Document' }}
-      </h1>
       <div
         ref="previewRef"
         class="preview-content prose prose-neutral max-w-none dark:prose-invert"

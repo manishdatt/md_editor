@@ -8,6 +8,14 @@ const route = useRoute()
 const token = computed(() => String(route.params.token || ''))
 const docTitle = useState<string>('shared-doc-title', () => '')
 
+// Fetch on the server so the client receives the document in the Nuxt payload
+// and can render it immediately (no loading-skeleton flash). A background
+// revalidation in the component keeps the view live.
+const { data } = await useFetch<{ title: string, content: string, updated_at: number } | null>(
+  () => `/api/public/doc/${token.value}`
+)
+useState(`shared-initial-doc-${token.value}`, () => data.value ?? null)
+
 useSeoMeta({
   robots: 'noindex, nofollow',
   title: () => docTitle.value || 'Shared document | shbd'
