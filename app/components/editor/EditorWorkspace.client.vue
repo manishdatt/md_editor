@@ -666,10 +666,13 @@ function initializeEditor() {
         }
       }),
       HardBreak.extend({
-        // Trailing newline so a hard break ends its line. Without it, a break
-        // glued to following block-level markdown (e.g. `<br>### Heading`)
-        // would stop the heading from parsing.
-        renderMarkdown: () => '<br>\n'
+        // Serialize a hard break as a Markdown-native break (two trailing
+        // spaces + newline). markdown-it parses this as a `br` token (a real
+        // `hardBreak` node), and `marked` renders it as `<br>` in the preview.
+        // Using an HTML `<br>` instead collides with the inline-HTML handling
+        // (RawHtmlText) which captures it as literal text, so Shift+Enter would
+        // round-trip as visible "<br>" and break alignment on refresh.
+        renderMarkdown: () => '  \n'
       }),
       Markdown.configure({
         markedOptions: {
