@@ -100,6 +100,16 @@ graph TD
       </code></pre>
       <p>For more information, see the <a href="https://mermaid.js.org/intro/" target="_blank" rel="noopener">Mermaid documentation</a>.</p>
 
+      <h2>Inline SVG</h2>
+      <p>Use <code>svg</code> fences to embed inline SVG markup. It is rendered in the preview, included in PDF exports, and sanitized for safety before display:</p>
+      <pre><code>```svg
+&lt;svg viewBox="0 0 120 60" xmlns="http://www.w3.org/2000/svg"&gt;
+  &lt;circle cx="60" cy="30" r="20" fill="currentColor" /&gt;
+&lt;/svg&gt;
+```
+      </code></pre>
+      <p>Tip: the SVG toolbar button inserts a starter block you can edit in place.</p>
+
       <h2>Tables</h2>
       <p>Table syntax:</p>
       <pre><code>| Column 1 | Column 2 |

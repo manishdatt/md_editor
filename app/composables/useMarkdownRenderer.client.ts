@@ -68,11 +68,22 @@ function emojifyText(value: string) {
 export function useMarkdownRenderer() {
   const { ensureHighlighter, highlightCode, normalizeLanguage } = useShikiHighlighter()
 
-  async function renderToHtml(markdown: string, options?: { themeMode?: 'auto' | 'light' | 'dark' }) {
+  async function renderToHtml(markdown: string, options?: { themeMode?: 'auto' | 'light' | 'dark', hardenLinks?: boolean }) {
     await ensureHighlighter()
 
     const { marked } = await import('marked')
     const renderer = new marked.Renderer()
+
+    // Pre-import DOMPurify only when an svg fence exists so regular documents
+    // don't pay the module cost. SVG content comes from the document author
+    // (or, on shared pages, an untrusted author), so it must be sanitized
+    // before reaching the DOM.
+    const needsSvgSanitizer = /^```svg\s*$/im.test(markdown)
+    let sanitize: ((svg: string) => string) | null = null
+    if (needsSvgSanitizer) {
+      const DOMPurify = (await import('dompurify')).default
+      sanitize = (svg: string) => DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+    }
 
     renderer.code = ({ text, lang }: any) => {
       const source = String(text || '')
@@ -82,12 +93,38 @@ export function useMarkdownRenderer() {
         return `<div class="mermaid">${escapeHtml(source)}</div>`
       }
 
+      if (language === 'svg') {
+        return `<div class="svg-block">${sanitize ? sanitize(source) : escapeHtml(source)}</div>`
+      }
+
       return highlightCode(source, normalizeLanguage(language || 'text'), options?.themeMode || 'auto')
     }
 
     renderer.html = (token: any) => {
       const html = typeof token === 'string' ? token : String(token?.text || '')
       return escapeHtml(html)
+    }
+
+    if (options?.hardenLinks) {
+      // Public anonymous surface: marked does not sanitize hrefs, so strip
+      // javascript:/data:/vbscript: protocols and force safe link attributes.
+      // Regular function (not arrow) so `this` binds to the Renderer at call
+      // time and `this.parser` is available, matching marked's default link().
+      renderer.link = function (this: any, { href, title, tokens }: any) {
+        const text = this?.parser ? this.parser.parseInline(tokens) : String(tokens?.[0]?.text || '')
+        const url = String(href || '').trim()
+        const safe = /^(https?:|mailto:|#|\/)/i.test(url) ? url : '#'
+        let encoded = '#'
+        if (safe !== '#') {
+          try {
+            encoded = encodeURI(safe).replace(/%25/g, '%')
+          } catch {
+            encoded = '#'
+          }
+        }
+        const titleAttr = title ? ` title="${escapeHtml(String(title)).replaceAll('"', '&quot;')}"` : ''
+        return `<a href="${encoded}"${titleAttr} target="_blank" rel="noopener nofollow ugc">${text}</a>`
+      }
     }
 
     return String(marked.parse(markdown, {

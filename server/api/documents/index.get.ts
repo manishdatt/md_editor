@@ -12,6 +12,8 @@ export default defineEventHandler(async (event) => {
       title: documents.title,
       content: documents.content,
       format: documents.format,
+      shareToken: documents.shareToken,
+      isShared: documents.isShared,
       updated_at: documents.updatedAt
     })
     .from(documents)

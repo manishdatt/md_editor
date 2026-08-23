@@ -7,6 +7,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { CodeBlockShiki } from '~/extensions/codeBlockShiki'
 import { MarkdownTableBlock } from '~/extensions/markdownTableBlock'
 import { MermaidBlock } from '~/extensions/mermaidBlock'
+import { SvgBlock } from '~/extensions/svgBlock'
 import { RawHtmlText } from '~/extensions/rawHtmlText'
 import { AiGhostText } from '~/extensions/aiGhostText'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
@@ -19,6 +20,8 @@ type DocItem = {
   title: string
   content: string
   format?: DocumentFormat
+  shareToken?: string | null
+  isShared?: boolean
   updated_at: number
 }
 
@@ -53,6 +56,16 @@ let activeSave: Promise<void> | null = null
 let activeModeKey = ''
 let onThemeChanged: (() => void) | null = null
 
+// Public share-link state for the current document
+const runtimeConfig = useRuntimeConfig()
+const shareToken = ref('')
+const isShared = ref(false)
+const shareOpen = ref(false)
+const shareBusy = ref(false)
+const shareMessage = ref('')
+const shareCopied = ref(false)
+let shareCopiedTimer: ReturnType<typeof setTimeout> | null = null
+
 const sessionState = authClient.useSession()
 const isLoaded = computed(() => !sessionState.value?.isPending)
 const isSignedIn = computed(() => Boolean(sessionState.value?.data?.user))
@@ -81,6 +94,17 @@ const canCreateDocument = computed(() => {
   return !(userTier.value === 'free' && docs.value.length >= 3)
 })
 
+// Only saved, authenticated markdown documents can be shared (anonymous
+// public-mode docs are never persisted server-side)
+const canShare = computed(() => isAuthenticatedMode.value && Boolean(currentDocId.value) && docFormat.value === 'markdown')
+const shareUrl = computed(() => {
+  if (!isShared.value || !shareToken.value) {
+    return ''
+  }
+  const siteUrl = String(runtimeConfig.public.siteUrl || '').replace(/\/+$/, '')
+  return siteUrl ? `${siteUrl}/p/${shareToken.value}` : ''
+})
+
 function makeId() {
   return crypto.randomUUID()
 }
@@ -106,6 +130,12 @@ async function loadDocument(id: string) {
   docFormat.value = response.document.format === 'typst' ? 'typst' : 'markdown'
   typstError.value = ''
   markdown.value = response.document.content
+
+  // Share state for the newly opened document
+  shareToken.value = response.document.shareToken || ''
+  isShared.value = response.document.isShared === true
+  shareOpen.value = false
+  shareMessage.value = ''
 
   // Typst source must never pass through the TipTap editor: its markdown
   // serializer would rewrite (and corrupt) the .typ syntax.
@@ -192,6 +222,64 @@ async function refreshPreview() {
   }
 }
 
+function resetShareState() {
+  shareToken.value = ''
+  isShared.value = false
+  shareOpen.value = false
+  shareMessage.value = ''
+  shareBusy.value = false
+}
+
+async function postShare(enabled: boolean, rotate = false) {
+  if (!canShare.value || shareBusy.value) {
+    return
+  }
+
+  shareBusy.value = true
+  shareMessage.value = ''
+
+  try {
+    const response = await $fetch<{ isShared: boolean, token: string | null, url: string | null }>(
+      `/api/documents/${currentDocId.value}/share`,
+      { method: 'POST', body: { enabled, rotate } }
+    )
+
+    isShared.value = !!response.isShared
+    shareToken.value = response.token || ''
+  } catch (error: any) {
+    shareMessage.value = error?.data?.statusMessage || error?.message || 'Share action failed'
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function copyShareUrl() {
+  if (!shareUrl.value) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(shareUrl.value)
+  } catch {
+    // Fallback for non-secure-context/denied clipboard API
+    const input = document.createElement('input')
+    input.value = shareUrl.value
+    document.body.appendChild(input)
+    input.select()
+    document.execCommand('copy')
+    document.body.removeChild(input)
+  }
+
+  shareCopied.value = true
+  if (shareCopiedTimer) {
+    clearTimeout(shareCopiedTimer)
+  }
+  shareCopiedTimer = setTimeout(() => {
+    shareCopied.value = false
+    shareCopiedTimer = null
+  }, 1500)
+}
+
 async function createDocumentAuthenticated(format: DocumentFormat = 'markdown') {
   const id = makeId()
   const now = Date.now()
@@ -238,6 +326,7 @@ async function createLocalDocument() {
   saveState.value = 'idle'
   freeTierMessage.value = ''
   pendingMarkdown.value = null
+  resetShareState()
 
   if (editor.value) {
     editor.value.commands.setContent('', { contentType: 'markdown' })
@@ -373,6 +462,15 @@ function insertMermaidBlock() {
     type: 'mermaidBlock',
     attrs: {
       code: 'graph TD\n  A[Start] --> B[End]'
+    }
+  }).run()
+}
+
+function insertSvgBlock() {
+  editor.value?.chain().focus().insertContent({
+    type: 'svgBlock',
+    attrs: {
+      code: '<svg viewBox="0 0 120 60" xmlns="http://www.w3.org/2000/svg">\n  <circle cx="60" cy="30" r="20" fill="currentColor" />\n</svg>'
     }
   }).run()
 }
@@ -523,6 +621,7 @@ function initializeEditor() {
         }
       }),
       RawHtmlText,
+      SvgBlock,
       CodeBlockShiki,
       MarkdownTableBlock,
       MermaidBlock,
@@ -567,6 +666,7 @@ async function initializePublicMode() {
   freeTierMessage.value = ''
   userTier.value = 'free'
   pendingMarkdown.value = null
+  resetShareState()
 
   if (saveTimer.value) {
     clearTimeout(saveTimer.value)
@@ -747,6 +847,18 @@ watch([isLoaded, isSignedIn, userId], async () => {
         </button>
 
         <button
+          v-if="canShare"
+          type="button"
+          class="rounded-md border px-3 py-1 text-sm"
+          :class="isShared
+            ? 'border-emerald-600 text-emerald-700 dark:border-emerald-500 dark:text-emerald-300'
+            : 'border-neutral-300 dark:border-neutral-700'"
+          @click="shareOpen = !shareOpen"
+        >
+          {{ isShared ? 'Shared ✓' : 'Share' }}
+        </button>
+
+        <button
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
           :disabled="isPublicMode || docFormat === 'typst'"
@@ -773,6 +885,72 @@ watch([isLoaded, isSignedIn, userId], async () => {
         >
 
         <span class="text-xs text-neutral-500">{{ saveState }}</span>
+      </div>
+
+      <div
+        v-if="canShare && shareOpen"
+        class="flex flex-col gap-2 rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+      >
+        <template v-if="isShared">
+          <span class="text-xs text-neutral-500 dark:text-neutral-400">
+            Anyone with the link can view the rendered document — it updates automatically when you edit.
+          </span>
+          <div class="flex flex-wrap items-center gap-2">
+            <input
+              :value="shareUrl"
+              type="text"
+              readonly
+              class="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+              @focus="($event.target as HTMLInputElement).select()"
+            >
+            <button
+              type="button"
+              class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
+              @click="copyShareUrl"
+            >
+              {{ shareCopied ? 'Copied!' : 'Copy' }}
+            </button>
+            <button
+              type="button"
+              class="rounded-md border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-neutral-700"
+              title="Turn off sharing. The same URL is restored if you re-enable it."
+              :disabled="shareBusy"
+              @click="postShare(false)"
+            >
+              Disable
+            </button>
+            <button
+              type="button"
+              class="rounded-md border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-neutral-700"
+              title="Generate a new URL. The old link stops working permanently."
+              :disabled="shareBusy"
+              @click="postShare(true, true)"
+            >
+              {{ shareBusy ? '…' : 'Rotate' }}
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <span class="text-xs text-neutral-500 dark:text-neutral-400">
+            Sharing is off. When enabled, anyone with the link can view the rendered document — it updates automatically when you edit.
+          </span>
+          <div>
+            <button
+              type="button"
+              class="rounded-md border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-neutral-700"
+              :disabled="shareBusy"
+              @click="postShare(true)"
+            >
+              {{ shareBusy ? '…' : 'Enable share link' }}
+            </button>
+          </div>
+        </template>
+        <span
+          v-if="shareMessage"
+          class="text-xs text-red-600 dark:text-red-400"
+        >
+          {{ shareMessage }}
+        </span>
       </div>
 
       <div
@@ -812,6 +990,13 @@ watch([isLoaded, isSignedIn, userId], async () => {
             @click="insertMermaidBlock"
           >
             Mermaid
+          </button>
+          <button
+            type="button"
+            class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
+            @click="insertSvgBlock"
+          >
+            SVG
           </button>
           <button
             type="button"

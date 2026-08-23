@@ -62,5 +62,9 @@ export const documents = sqliteTable('documents', {
   title: text('title').notNull(),
   content: text('content').notNull(),
   format: text('format', { enum: ['markdown', 'typst'] }).notNull().default('markdown'),
+  // shareToken uniqueness is enforced by the idx_documents_share_token index in
+  // ensureSchema (SQLite allows multiple NULLs, so unshared rows never collide)
+  shareToken: text('share_token'),
+  isShared: integer('is_shared', { mode: 'boolean' }).notNull().default(false),
   updatedAt: integer('updated_at', { mode: 'number' }).notNull()
 })

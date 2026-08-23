@@ -28,7 +28,8 @@ export const CodeBlockShiki = CodeBlock.extend({
   },
 
   parseMarkdown(token, helpers) {
-    if (token.lang === 'mermaid') {
+    // svg/mermaid fences belong to their dedicated blocks
+    if (token.lang === 'mermaid' || token.lang === 'svg') {
       return []
     }
 

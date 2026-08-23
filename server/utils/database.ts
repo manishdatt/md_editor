@@ -101,8 +101,13 @@ export async function ensureSchema(event?: H3Event) {
             title TEXT NOT NULL,
             content TEXT NOT NULL,
             format TEXT NOT NULL DEFAULT 'markdown',
+            share_token TEXT,
+            is_shared INTEGER NOT NULL DEFAULT 0,
             updated_at INTEGER NOT NULL
-          )`
+          )`,
+          // Uniqueness for share tokens (NULLs are distinct in SQLite, so
+          // unshared rows never collide). Idempotent for fresh and existing DBs.
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_share_token ON documents(share_token)`
         ]
 
       for (const statement of statements) {
@@ -137,6 +142,32 @@ export async function ensureSchema(event?: H3Event) {
           `ALTER TABLE documents ADD COLUMN format TEXT NOT NULL DEFAULT 'markdown'`
         )).catch((err) => {
           failures.push(`ALTER documents format -> ${err?.message || String(err)}`)
+        })
+      }
+
+      // Public share-link columns. Same PRAGMA-guarded ALTER pattern: existing
+      // tables get the columns added in place, fresh tables already have them.
+      const hasShareToken = Array.isArray(documentColumns) && documentColumns.some(
+        (column: any) => column?.name === 'share_token'
+      )
+
+      if (!hasShareToken) {
+        await database.run(sql.raw(
+          `ALTER TABLE documents ADD COLUMN share_token TEXT`
+        )).catch((err) => {
+          failures.push(`ALTER documents share_token -> ${err?.message || String(err)}`)
+        })
+      }
+
+      const hasIsShared = Array.isArray(documentColumns) && documentColumns.some(
+        (column: any) => column?.name === 'is_shared'
+      )
+
+      if (!hasIsShared) {
+        await database.run(sql.raw(
+          `ALTER TABLE documents ADD COLUMN is_shared INTEGER NOT NULL DEFAULT 0`
+        )).catch((err) => {
+          failures.push(`ALTER documents is_shared -> ${err?.message || String(err)}`)
         })
       }
 

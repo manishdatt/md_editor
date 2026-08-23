@@ -116,3 +116,11 @@ body {
   box-shadow: none !important;
   border: 0 !important;
 }
+
+.svg-block {
+  @apply my-3 flex justify-center overflow-x-auto;
+}
+
+.svg-block svg {
+  @apply max-w-full h-auto;
+}
