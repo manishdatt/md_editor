@@ -186,6 +186,7 @@ export function extractAlignment(markdown: string): { clean: string, directives:
   let pendingAlign: AlignValue | null = null
   let blockIndex = 0
   let inBlock = false
+  let sawMarker = false
 
   const claimBlock = (line: string) => {
     if (pendingAlign !== null) {
@@ -211,6 +212,7 @@ export function extractAlignment(markdown: string): { clean: string, directives:
 
     const trailing = line.match(TRAILING_MARKER_RE)
     if (trailing) {
+      sawMarker = true
       try {
         const map = JSON.parse(trailing[1]) as Record<string, string>
         for (const [idx, align] of Object.entries(map)) {
@@ -243,6 +245,17 @@ export function extractAlignment(markdown: string): { clean: string, directives:
     }
 
     claimBlock(line)
+  }
+
+  // Removing the trailing marker line leaves the separator blank(s) that
+  // preceded it dangling at EOF, which the preview would render as one
+  // phantom spacer at the bottom of the document. Drop them — but only when
+  // a marker was actually removed, so authorial trailing spacing in
+  // marker-free documents is preserved byte-for-byte.
+  if (sawMarker) {
+    while (cleaned.length > 0 && cleaned[cleaned.length - 1] === '') {
+      cleaned.pop()
+    }
   }
 
   return { clean: cleaned.join('\n'), directives }

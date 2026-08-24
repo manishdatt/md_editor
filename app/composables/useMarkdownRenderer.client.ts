@@ -99,6 +99,56 @@ function isRawHtmlFence(language: string): boolean {
 // content is never altered.
 const LIST_ITEM_LINE_RE = /^\s*([-*+]|\d{1,9}[.)])\s/
 
+// Shared links render the RAW stored markdown, while the editor normalizes
+// legacy `&nbsp;` empty-paragraph markers when loading — so documents saved by
+// older builds spaced differently on the public share page than in the app
+// preview. Canonicalize marker runs into the plain blank-line encoding here
+// (display only, mirrors normalizeBlankLineMarkers) so every rendering surface
+// converges regardless of when the document was last saved. Pure blank-line
+// runs from hand-authored files are kept verbatim; fences are untouched.
+function canonicalizeStoredMarkers(markdown: string): string {
+  let inFence = false
+  let runBlanks = 0
+  let runMarkers = 0
+  const out: string[] = []
+  const flushRun = () => {
+    if (runBlanks === 0 && runMarkers === 0) {
+      return
+    }
+    const keep = runMarkers > 0 ? runMarkers + 1 : runBlanks
+    for (let i = 0; i < keep; i++) {
+      out.push('')
+    }
+    runBlanks = 0
+    runMarkers = 0
+  }
+  for (const line of markdown.split('\n')) {
+    if (/^\s*```/.test(line)) {
+      flushRun()
+      inFence = !inFence
+      out.push(line)
+      continue
+    }
+    if (inFence) {
+      out.push(line)
+      continue
+    }
+    const trimmed = line.trim()
+    if (trimmed === '') {
+      runBlanks += 1
+      continue
+    }
+    if (trimmed.replace(/&nbsp;/g, '').replace(/\u00A0/g, '') === '') {
+      runMarkers += 1
+      continue
+    }
+    flushRun()
+    out.push(line)
+  }
+  flushRun()
+  return out.join('\n')
+}
+
 function blankLinesToSpacers(markdown: string): string {
   const lines = markdown.split('\n')
   let inFence = false
@@ -300,8 +350,10 @@ export function useMarkdownRenderer() {
 
     // Emojify first (pre-parse): the markdown lexer fragments escaped
     // underscores into separate tokens, so per-token replacement misses
-    // shortcodes like :white\_check\_mark:.
-    const { clean, directives } = extractAlignment(emojifyMarkdown(markdown))
+    // shortcodes like :white\_check\_mark:. Canonicalize legacy `&nbsp;`
+    // markers before parsing so stored content renders exactly like the
+    // editor's normalized live preview.
+    const { clean, directives } = extractAlignment(canonicalizeStoredMarkers(emojifyMarkdown(markdown)))
     const displayMarkdown = blankLinesToSpacers(wrapAlignedBlocks(clean, directives))
 
     return sanitizeHtml(String(marked.parse(displayMarkdown, {
