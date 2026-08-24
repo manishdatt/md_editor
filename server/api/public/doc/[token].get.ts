@@ -1,5 +1,5 @@
-import { and, eq } from 'drizzle-orm'
-import { documents } from '~~/server/db/schema'
+import { and, eq, isNull } from 'drizzle-orm'
+import { documents, user } from '~~/server/db/schema'
 import { useDatabase } from '~~/server/utils/database'
 
 // Unauthenticated public read for shared documents. Deliberately returns a
@@ -24,7 +24,10 @@ export default defineEventHandler(async (event) => {
       updated_at: documents.updatedAt
     })
     .from(documents)
-    .where(and(eq(documents.shareToken, token), eq(documents.isShared, true)))
+    .innerJoin(user, eq(user.id, documents.ownerId))
+    // Documents owned by admin-disabled accounts are hidden; the 404 below is
+    // indistinguishable from an unknown or revoked token.
+    .where(and(eq(documents.shareToken, token), eq(documents.isShared, true), isNull(user.disabledAt)))
     .limit(1)
 
   const doc = rows[0]

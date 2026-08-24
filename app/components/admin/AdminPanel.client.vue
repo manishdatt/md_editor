@@ -5,7 +5,7 @@ import { authClient } from '~/lib/auth-client'
 type Tier = 'free' | 'paid'
 
 type AdminStats = {
-  users: { total: number, paid: number }
+  users: { total: number, paid: number, disabled: number }
   documents: { total: number, storageBytes: number, shared: number, typst: number }
 }
 
@@ -15,6 +15,7 @@ type AdminUserRow = {
   email: string
   tier: Tier
   emailVerified: boolean
+  disabledAt: number | null
   createdAt: number
   documentCount: number
   storageBytes: number
@@ -35,6 +36,7 @@ type AdminDocRow = {
 const sessionState = authClient.useSession()
 const isSignedIn = computed(() => Boolean(sessionState.value?.data?.user))
 const isLoaded = computed(() => !sessionState.value?.isPending)
+const myEmail = computed(() => String(sessionState.value?.data?.user?.email || '').toLowerCase())
 
 const phase = ref<'loading' | 'ready' | 'forbidden' | 'error'>('loading')
 const errorMessage = ref('')
@@ -141,6 +143,33 @@ async function openUserDocs(row: AdminUserRow) {
   }
 }
 
+async function toggleDisabled(row: AdminUserRow) {
+  const next = !row.disabledAt
+  const verb = next ? 'Disable' : 'Re-enable'
+  const effect = next
+    ? 'Their editor APIs will stop working and their public share links will return 404.'
+    : 'They will regain full access.'
+  if (!window.confirm(`${verb} ${row.email}? ${effect}`)) {
+    return
+  }
+  savingTierFor.value = row.id
+  try {
+    await $fetch(`/api/admin/users/${encodeURIComponent(row.id)}`, {
+      method: 'PATCH',
+      body: { disabled: next }
+    })
+    row.disabledAt = next ? Date.now() : null
+    if (stats.value) {
+      stats.value.users.disabled = Math.max(0, stats.value.users.disabled + (next ? 1 : -1))
+    }
+  } catch (err) {
+    errorMessage.value = `Failed: ${errMessage(err)}`
+    window.setTimeout(() => { errorMessage.value = '' }, 4000)
+  } finally {
+    savingTierFor.value = null
+  }
+}
+
 async function fetchRecentDocs() {
   try {
     const res = await $fetch<{ documents: AdminDocRow[] }>('/api/admin/documents?limit=50')
@@ -242,7 +271,7 @@ onMounted(() => {
         <div class="rounded-lg border border-neutral-300 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
           <div class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Users</div>
           <div class="mt-1 text-2xl font-semibold">{{ stats.users.total }}</div>
-          <div class="text-xs text-neutral-500 dark:text-neutral-400">{{ stats.users.paid }} paid</div>
+          <div class="text-xs text-neutral-500 dark:text-neutral-400">{{ stats.users.paid }} paid · {{ stats.users.disabled }} disabled</div>
         </div>
         <div class="rounded-lg border border-neutral-300 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
           <div class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Documents</div>
@@ -257,7 +286,7 @@ onMounted(() => {
           <div class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Shared links</div>
           <div class="mt-1 text-2xl font-semibold">{{ stats.documents.shared }}</div>
         </div>
-        <div class="col-span-2 rounded-lg border border-neutral-300 bg-white p-4 sm:col-span-1 lg:col-span-2 dark:border-neutral-700 dark:bg-neutral-900">
+        <div class="rounded-lg border border-neutral-300 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
           <div class="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Avg docs / user</div>
           <div class="mt-1 text-2xl font-semibold">
             {{ stats.users.total ? (stats.documents.total / stats.users.total).toFixed(1) : '0' }}
@@ -273,6 +302,7 @@ onMounted(() => {
             <thead class="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
               <tr>
                 <th class="px-4 py-2.5 font-medium">User</th>
+                <th class="px-4 py-2.5 font-medium">Status</th>
                 <th class="px-4 py-2.5 font-medium">Tier</th>
                 <th class="px-4 py-2.5 font-medium">Docs</th>
                 <th class="px-4 py-2.5 font-medium">Storage</th>
@@ -285,8 +315,18 @@ onMounted(() => {
               <template v-for="row in users" :key="row.id">
                 <tr class="border-b border-neutral-100 last:border-b-0 dark:border-neutral-800">
                   <td class="px-4 py-2.5">
-                    <div class="font-medium">{{ row.name }}</div>
+                    <div class="font-medium" :class="row.disabledAt ? 'text-neutral-400 line-through dark:text-neutral-500' : ''">{{ row.name }}</div>
                     <div class="text-xs text-neutral-500 dark:text-neutral-400">{{ row.email }}</div>
+                  </td>
+                  <td class="px-4 py-2.5">
+                    <span
+                      class="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+                      :class="row.disabledAt
+                        ? 'bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-300'
+                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300'"
+                    >
+                      {{ row.disabledAt ? 'Disabled' : 'Active' }}
+                    </span>
                   </td>
                   <td class="px-4 py-2.5">
                     <select
@@ -304,16 +344,27 @@ onMounted(() => {
                   <td class="px-4 py-2.5 text-neutral-500 dark:text-neutral-400">{{ formatDate(row.createdAt) }}</td>
                   <td class="px-4 py-2.5 text-neutral-500 dark:text-neutral-400">{{ formatDate(row.lastActivity) }}</td>
                   <td class="px-4 py-2.5 text-right">
-                    <button
-                      class="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-                      @click="openUserDocs(row)"
-                    >
-                      {{ expandedUserId === row.id ? 'Hide docs' : 'Docs' }}
-                    </button>
+                    <div class="flex items-center justify-end gap-1.5">
+                      <button
+                        class="rounded-md border px-2 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                        :class="row.disabledAt ? 'border-neutral-300 dark:border-neutral-700' : 'border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40'"
+                        :disabled="savingTierFor === row.id || row.email === myEmail"
+                        :title="row.email === myEmail ? 'You cannot disable your own account' : ''"
+                        @click="toggleDisabled(row)"
+                      >
+                        {{ row.disabledAt ? 'Enable' : 'Disable' }}
+                      </button>
+                      <button
+                        class="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                        @click="openUserDocs(row)"
+                      >
+                        {{ expandedUserId === row.id ? 'Hide docs' : 'Docs' }}
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 <tr v-if="expandedUserId === row.id">
-                  <td colspan="7" class="bg-neutral-50 px-4 py-3 dark:bg-neutral-950">
+                  <td colspan="8" class="bg-neutral-50 px-4 py-3 dark:bg-neutral-950">
                     <div v-if="expandedLoading" class="py-2 text-xs text-neutral-500">Loading…</div>
                     <div v-else-if="expandedDocs.length === 0" class="py-2 text-xs text-neutral-500">No documents.</div>
                     <ul v-else class="space-y-1.5">
@@ -330,7 +381,7 @@ onMounted(() => {
                 </tr>
               </template>
               <tr v-if="users.length === 0">
-                <td colspan="7" class="px-4 py-6 text-center text-sm text-neutral-500">No users yet.</td>
+                <td colspan="8" class="px-4 py-6 text-center text-sm text-neutral-500">No users yet.</td>
               </tr>
             </tbody>
           </table>

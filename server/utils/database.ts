@@ -58,6 +58,7 @@ export async function ensureSchema(event?: H3Event) {
             email_verified INTEGER NOT NULL DEFAULT 0,
             image TEXT,
             tier TEXT NOT NULL DEFAULT 'free',
+            disabled_at INTEGER,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
           )`,
@@ -142,6 +143,21 @@ export async function ensureSchema(event?: H3Event) {
           `ALTER TABLE documents ADD COLUMN format TEXT NOT NULL DEFAULT 'markdown'`
         )).catch((err) => {
           failures.push(`ALTER documents format -> ${err?.message || String(err)}`)
+        })
+      }
+
+      // Admin soft-ban column on user (null = active). Same PRAGMA-guarded
+      // ALTER pattern for pre-existing deployments.
+      const userColumns = await database.all(sql.raw(`PRAGMA table_info(user)`)).catch(() => [])
+      const hasDisabledAt = Array.isArray(userColumns) && userColumns.some(
+        (column: any) => column?.name === 'disabled_at'
+      )
+
+      if (!hasDisabledAt) {
+        await database.run(sql.raw(
+          `ALTER TABLE user ADD COLUMN disabled_at INTEGER`
+        )).catch((err) => {
+          failures.push(`ALTER user disabled_at -> ${err?.message || String(err)}`)
         })
       }
 

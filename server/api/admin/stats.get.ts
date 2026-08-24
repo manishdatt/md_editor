@@ -10,7 +10,8 @@ export default defineEventHandler(async (event) => {
   const [userAgg] = await db
     .select({
       total: sql<number>`count(*)`,
-      paid: sql<number>`sum(case when ${user.tier} = 'paid' then 1 else 0 end)`
+      paid: sql<number>`sum(case when ${user.tier} = 'paid' then 1 else 0 end)`,
+      disabled: sql<number>`coalesce(sum(case when ${user.disabledAt} is not null then 1 else 0 end), 0)`
     })
     .from(user)
 
@@ -26,7 +27,8 @@ export default defineEventHandler(async (event) => {
   return {
     users: {
       total: Number(userAgg?.total ?? 0),
-      paid: Number(userAgg?.paid ?? 0)
+      paid: Number(userAgg?.paid ?? 0),
+      disabled: Number(userAgg?.disabled ?? 0)
     },
     documents: {
       total: Number(docAgg?.total ?? 0),

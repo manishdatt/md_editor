@@ -22,10 +22,20 @@ export async function requireAuthenticatedUser(event: H3Event): Promise<Authenti
 
   const db = await useDatabase()
   const rows = await db
-    .select({ tier: user.tier })
+    .select({ tier: user.tier, disabledAt: user.disabledAt })
     .from(user)
     .where(eq(user.id, sessionUser.id))
     .limit(1)
+
+  // Soft-banned accounts keep their session but fail every data API. Admins
+  // are unaffected (requireAdmin reads the row itself and skips this check).
+  if (rows[0]?.disabledAt) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Account disabled',
+      data: { code: 'ACCOUNT_DISABLED' }
+    })
+  }
 
   const tier = (rows[0]?.tier as UserTier) || 'free'
 

@@ -9,6 +9,9 @@ export const user = sqliteTable('user', {
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   image: text('image'),
   tier: text('tier').notNull().default('free'),
+  // Soft ban set from the admin panel (null = active). Disabled accounts fail
+  // every authenticated data API and their public share links return 404.
+  disabledAt: integer('disabled_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
 })
