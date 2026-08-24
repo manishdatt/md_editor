@@ -33,7 +33,8 @@ export const CodeBlockShiki = CodeBlock.extend({
       return []
     }
 
-    if (token.raw?.startsWith('```') === false && token.codeBlockStyle !== 'indented') {
+    const raw = String(token.raw || '')
+    if (!raw.startsWith('```') && !raw.startsWith('~~~') && token.codeBlockStyle !== 'indented') {
       return []
     }
 

@@ -145,7 +145,7 @@ export function expandBlankRunsForParse(markdown: string): string {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    if (/^\s*```/.test(line)) {
+    if (/^\s*(```|~~~)/.test(line)) {
       inFence = !inFence
       lastContentLine = line
       out.push(line)
@@ -162,7 +162,7 @@ export function expandBlankRunsForParse(markdown: string): string {
       }
       let nextContentLine: string | null = null
       for (let j = runEnd; j < lines.length; j++) {
-        if (/^\s*```/.test(lines[j])) {
+        if (/^\s*(```|~~~)/.test(lines[j])) {
           break
         }
         if (lines[j].trim() !== '') {
@@ -226,9 +226,17 @@ export function extractAlignment(markdown: string): { clean: string, directives:
   }
 
   for (const line of lines) {
-    if (/^\s*```/.test(line)) {
-      fence = !fence
-      claimBlock(line)
+    if (/^\s*(```|~~~)/.test(line)) {
+      if (!fence) {
+        // A fenced code block is one top-level editor block. Count it when
+        // the opening fence is encountered; the closing fence only completes
+        // that same block and must not advance the alignment index.
+        fence = true
+        claimBlock(line)
+      } else {
+        fence = false
+        cleaned.push(line)
+      }
       continue
     }
 

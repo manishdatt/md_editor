@@ -98,7 +98,7 @@ function renderBlankLineGaps(markdown: string): string {
   const out: string[] = []
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    if (/^\s*```/.test(line)) {
+    if (/^\s*(```|~~~)/.test(line)) {
       inFence = !inFence
       lastContentLine = line
       out.push(line)
@@ -170,7 +170,7 @@ function splitTopLevelChunks(markdown: string): { chunks: TopLevelChunk[], trail
     }
   }
   for (const line of lines) {
-    if (/^\s*```/.test(line)) {
+    if (/^\s*(```|~~~)/.test(line)) {
       fence = !fence
       current.push(line)
       continue
