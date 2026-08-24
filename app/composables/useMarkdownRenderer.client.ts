@@ -1,39 +1,19 @@
 import { useShikiHighlighter } from '~/composables/useShikiHighlighter.client'
 import { extractAlignment, type AlignmentDirective } from '~/utils/markdownAlignment'
 import { sanitizeHtml } from '~/utils/sanitizeHtml'
+import { gemoji } from 'gemoji'
 
 let mermaidInstancePromise: Promise<any> | null = null
 
-const emojiShortcodes: Record<string, string> = {
-  grinning: '😀',
-  smile: '😄',
-  smiley: '😃',
-  laughing: '😆',
-  wink: '😉',
-  blush: '😊',
-  thinking: '🤔',
-  neutral_face: '😐',
-  expressionless: '😑',
-  crying: '😢',
-  sob: '😭',
-  angry: '😠',
-  thumbsup: '👍',
-  '+1': '👍',
-  thumbsdown: '👎',
-  '-1': '👎',
-  clap: '👏',
-  raised_hands: '🙌',
-  fire: '🔥',
-  sparkles: '✨',
-  tada: '🎉',
-  rocket: '🚀',
-  heart: '❤️',
-  broken_heart: '💔',
-  star: '⭐',
-  white_check_mark: '✅',
-  x: '❌',
-  warning: '⚠️',
-  bulb: '💡'
+// Full shortcode -> emoji lookup built once from the gemoji dataset (~1870
+// entries). `names` includes GitHub-style aliases (+1, -1, thumbsup,
+// white_check_mark, ...), so every common `:name:` works without a hardcoded
+// list. Unknown shortcodes are left untouched by emojifyText.
+const emojiShortcodes = new Map<string, string>()
+for (const entry of gemoji) {
+  for (const name of entry.names) {
+    emojiShortcodes.set(name.toLowerCase(), entry.emoji)
+  }
 }
 
 async function getMermaid() {
@@ -60,11 +40,42 @@ function escapeHtml(value: string) {
     .replaceAll('>', '&gt;')
 }
 
+// Shortcode names may contain underscores, and text typed in the TipTap editor
+// reaches this renderer with them escaped by the markdown serializer
+// (`:white_check_mark:` serializes to `:white\_check\_mark:`). Match both
+// forms; unknown shortcodes are returned untouched.
+const EMOJI_SHORTCODE_RE = /:(([a-z0-9+_-]|\\_)+):/gi
+
 function emojifyText(value: string) {
-  return value.replace(/:([a-z0-9_+-]+):/gi, (full, name: string) => {
-    const key = name.toLowerCase()
-    return emojiShortcodes[key] || full
+  return value.replace(EMOJI_SHORTCODE_RE, (full, rawName: string) => {
+    const name = rawName.replace(/\\_/g, '_').toLowerCase()
+    return emojiShortcodes.get(name) || full
   })
+}
+
+// Emojify runs BEFORE markdown parsing, not per-token afterwards: the lexer
+// splits escaped underscores (`white\_check`) into separate text/escape tokens
+// and intraword emphasis tokenization can fragment names, so a full `:name:`
+// is often no longer present in any single post-parse token. Fence blocks and
+// inline code spans are skipped so code keeps its literal content.
+function emojifyMarkdown(markdown: string): string {
+  let inFence = false
+  return markdown
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(```|~~~)/.test(line)) {
+        inFence = !inFence
+        return line
+      }
+      if (inFence) {
+        return line
+      }
+      return line
+        .split(/(`+[^`\n]*`+)/)
+        .map((part, index) => (index % 2 === 1 ? part : emojifyText(part)))
+        .join('')
+    })
+    .join('\n')
 }
 
 // Quarto raw-HTML fence (` ```{=html} `) and a simpler `rawhtml` alias render
@@ -75,15 +86,17 @@ function isRawHtmlFence(language: string): boolean {
 }
 
 // Markdown blank lines carry no reliable vertical space in HTML/PDF: any run
-// of them collapses to a single block separation. Convert EVERY blank line into
-// an explicit <br> (k blank lines -> k visible empty lines) while KEEPING the
-// blank line itself, because it is the block separator markdown needs so the
-// following heading/list still parses. The first <br> attaches to the previous
-// paragraph (`<p>text<br></p>`) and the rest render as standalone empty lines,
-// so the count matches exactly. Exception: a blank line between two list items
-// is a loose-list separator, not authorial spacing, so it is left untouched.
-// Fenced code/HTML/SVG blocks are skipped so their literal content is never
-// altered.
+// of them collapses to a single block separation. A run of B consecutive blank
+// lines encodes B-1 INTENTIONAL empty lines (see normalizeBlankLineMarkers:
+// the serializer's plain `\n\n` block separator is 1 blank = 0 gaps; each
+// editor empty paragraph adds one more). Emit one explicit <br> per gap while
+// KEEPING a blank line, because it is the block separator markdown needs so
+// the following heading/list still parses. The first <br> attaches to the
+// previous paragraph (`<p>text<br></p>`) and the rest render as standalone
+// empty lines, so the visible count matches exactly. Exception: a run between
+// two list items is a loose-list separator, not authorial spacing, so it is
+// left untouched. Fenced code/HTML/SVG blocks are skipped so their literal
+// content is never altered.
 const LIST_ITEM_LINE_RE = /^\s*([-*+]|\d{1,9}[.)])\s/
 
 function blankLinesToSpacers(markdown: string): string {
@@ -104,8 +117,12 @@ function blankLinesToSpacers(markdown: string): string {
       continue
     }
     if (line.trim() === '') {
+      let runEnd = i
+      while (runEnd < lines.length && lines[runEnd].trim() === '') {
+        runEnd += 1
+      }
       let nextContentLine: string | null = null
-      for (let j = i + 1; j < lines.length; j++) {
+      for (let j = runEnd; j < lines.length; j++) {
         if (lines[j].trim() !== '') {
           nextContentLine = lines[j]
           break
@@ -117,10 +134,19 @@ function blankLinesToSpacers(markdown: string): string {
         && LIST_ITEM_LINE_RE.test(lastContentLine)
         && LIST_ITEM_LINE_RE.test(nextContentLine)
       )
+      const gaps = Math.max(runEnd - i - 1, 0)
       if (!insideList) {
-        out.push('<br>')
+        for (let g = 0; g < gaps; g++) {
+          out.push('<br>')
+          out.push('')
+        }
+        out.push('')
+      } else {
+        for (let k = i; k < runEnd; k++) {
+          out.push('')
+        }
       }
-      out.push('')
+      i = runEnd - 1
       continue
     }
     lastContentLine = line
@@ -254,22 +280,16 @@ export function useMarkdownRenderer() {
       }
     }
 
-    // Alignments live in a single trailing marker line, stripped by
-    // extractAlignment. Blocks are wrapped for display only; the markdown text
-    // itself is never rewritten for style. (Previous normalize/restore passes
-    // rewrote the whole document and were a corruption source.)
-    const { clean, directives } = extractAlignment(markdown)
+    // Emojify first (pre-parse): the markdown lexer fragments escaped
+    // underscores into separate tokens, so per-token replacement misses
+    // shortcodes like :white\_check\_mark:.
+    const { clean, directives } = extractAlignment(emojifyMarkdown(markdown))
     const displayMarkdown = blankLinesToSpacers(wrapAlignedBlocks(clean, directives))
 
     return sanitizeHtml(String(marked.parse(displayMarkdown, {
       gfm: true,
       breaks: false,
-      renderer,
-      walkTokens: (token: any) => {
-        if (token?.type === 'text' && typeof token.text === 'string') {
-          token.text = emojifyText(token.text)
-        }
-      }
+      renderer
     })))
   }
 
