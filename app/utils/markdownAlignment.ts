@@ -19,21 +19,22 @@ const TRAILING_MARKER_RE = /^\s*<!--\s*alignment:\s*(\{[^\n]*\})\s*-->\s*$/
 const LEGACY_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 
 // STORAGE FORMAT: documents are persisted as canonical Markdown with LF line
-// endings and ordinary blank-line runs. TipTap's `&nbsp;` empty-paragraph form
-// is used only when feeding content into the parser, because the parser needs
-// explicit empty paragraphs to reconstruct repeated spacing. It must never be
-// emitted as the long-term storage format.
+// endings, ordinary blank-line runs, and explicit `.markdown-spacer` elements
+// for extra authored gaps. TipTap's `&nbsp;` empty-paragraph form is used only
+// when feeding content into the parser and is never persisted.
 
 const LIST_ITEM_LINE_RE = /^\s*([-*+]|\d{1,9}[.)])\s/
 
 const EMPTY_PARAGRAPH_MARKER_RE = /^\s*(?:&nbsp;|\u00a0)\s*$/i
+const MARKDOWN_SPACER_RE = /^\s*<div\s+class=["']markdown-spacer["'](?:\s+[^>]*)?>\s*<\/div>\s*$/i
+const MARKDOWN_SPACER = '<div class="markdown-spacer"></div>'
 
 /**
  * Normalize content at the persistence boundary.
  *
  * This is deliberately idempotent. It converts legacy TipTap empty-paragraph
- * marker lines back to ordinary blank-line runs, while leaving fenced code and
- * legitimate non-breaking spaces untouched.
+ * marker lines back to the explicit spacer representation, while leaving fenced
+ * code and legitimate non-breaking spaces untouched.
  */
 export function normalizeMarkdownForStorage(markdown: string): string {
   const normalized = String(markdown || '').replace(/\r\n?/g, '\n')
@@ -41,19 +42,16 @@ export function normalizeMarkdownForStorage(markdown: string): string {
   const out: string[] = []
   let inFence = false
   let blankCount = 0
-  let markerCount = 0
 
   const flush = () => {
-    if (blankCount === 0 && markerCount === 0) {
+    if (blankCount === 0) {
       return
     }
 
-    const count = markerCount > 0 ? markerCount + 1 : blankCount
-    for (let i = 0; i < count; i += 1) {
+    for (let i = 0; i < blankCount; i += 1) {
       out.push('')
     }
     blankCount = 0
-    markerCount = 0
   }
 
   for (const line of lines) {
@@ -75,7 +73,14 @@ export function normalizeMarkdownForStorage(markdown: string): string {
     }
 
     if (EMPTY_PARAGRAPH_MARKER_RE.test(line)) {
-      markerCount += 1
+      flush()
+      out.push(MARKDOWN_SPACER)
+      continue
+    }
+
+    if (MARKDOWN_SPACER_RE.test(line)) {
+      flush()
+      out.push(MARKDOWN_SPACER)
       continue
     }
 
@@ -92,13 +97,23 @@ export function normalizeMarkdownForStorage(markdown: string): string {
 // markdown loader rebuilds empty paragraphs by COUNTING `\n\n` separators in
 // whitespace runs (parseImplicitEmptyParagraphs), which is lossy for plain
 // blank-line runs. Call this BEFORE setContent: it re-expands each run into
-// the library's canonical lossless form (explicit `&nbsp;` marker
-// paragraphs), so the parser rebuilds exactly B-1 empty paragraphs.
+// the library's internal lossless form (explicit `&nbsp;` marker paragraphs),
+// so the parser rebuilds exactly B-1 empty paragraphs.
 // IDEMPOTENT on canonical storage (single blank separators are untouched),
 // so it is always safe to call. Fences are skipped and loose-list separators
 // (blank line between two list items) are left alone.
 export function expandBlankRunsForParse(markdown: string): string {
-  const lines = markdown.split('\n')
+  const sourceLines = markdown.split('\n')
+  const lines: string[] = []
+  let sourceInFence = false
+  for (const line of sourceLines) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      sourceInFence = !sourceInFence
+      lines.push(line)
+      continue
+    }
+    lines.push(!sourceInFence && MARKDOWN_SPACER_RE.test(line) ? '&nbsp;' : line)
+  }
   let inFence = false
   let lastContentLine: string | null = null
   const out: string[] = []
