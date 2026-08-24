@@ -18,12 +18,39 @@ export interface AlignmentDirective {
 const TRAILING_MARKER_RE = /^\s*<!--\s*alignment:\s*(\{[^\n]*\})\s*-->\s*$/
 const LEGACY_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 
+// TipTap's markdown serializer emits `&nbsp;` (or a raw non-breaking space) for
+// empty paragraphs so they survive round-trips. Those lines are pure blank-line
+// markers: they pollute the markdown source and render inconsistently in print/PDF.
+// Collapse them to genuine blank lines. The parser rebuilds empty paragraphs from
+// blank lines (parseImplicitEmptyParagraphs), so the document round-trip stays intact.
+// Fenced code blocks are left untouched so their literal content is never altered.
+function normalizeBlankLineMarkers(markdown: string): string {
+  let inFence = false
+  return markdown
+    .split('\n')
+    .map((line) => {
+      if (/^\s*```/.test(line)) {
+        inFence = !inFence
+        return line
+      }
+      if (inFence) {
+        return line
+      }
+      const stripped = line
+        .replace(/&nbsp;/g, '')
+        .replace(/\u00A0/g, '')
+        .trim()
+      return stripped === '' ? '' : line
+    })
+    .join('\n')
+}
+
 // Persist non-default alignment as a single trailing marker line appended to
 // the standard Tiptap serialization. Lossless: the base markdown is produced
 // entirely by the built-in serializer; the marker is recomputed from the
 // current document state on every save.
 export function serializeWithAlignment(editor: Editor): string {
-  const base = editor.getMarkdown()
+  const base = normalizeBlankLineMarkers(editor.getMarkdown())
   const directives: Record<number, AlignValue> = {}
   editor.state.doc.forEach((node: PMNode, _offset: number, index: number) => {
     const align = (node.attrs?.textAlign as string | undefined) || ''

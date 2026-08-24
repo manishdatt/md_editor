@@ -58,6 +58,14 @@ body {
   margin-bottom: 0.35rem;
 }
 
+/* Intentional vertical gap. Use a blank line for a normal paragraph break; drop a
+   <div class="spacer"></div> into the source for an explicit extra gap instead of
+   stacking &nbsp; lines. Renders consistently in the preview and the exported PDF. */
+.preview-content .spacer {
+  height: 1em;
+  line-height: 0;
+}
+
 .preview-content :where(ul) {
   list-style: none !important;
   padding-left: 0 !important;
