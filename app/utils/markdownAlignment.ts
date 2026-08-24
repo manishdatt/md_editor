@@ -19,21 +19,35 @@ const TRAILING_MARKER_RE = /^\s*<!--\s*alignment:\s*(\{[^\n]*\})\s*-->\s*$/
 const LEGACY_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 
 // TipTap's markdown serializer emits `&nbsp;` (or a raw non-breaking space) for
-// empty paragraphs so they survive round-trips. Those lines are pure blank-line
-// markers: they pollute the markdown source and render inconsistently in print/PDF.
-// Collapse them to genuine blank lines. The parser rebuilds empty paragraphs from
-// blank lines (parseImplicitEmptyParagraphs), so the document round-trip stays intact.
-// Consecutive blank lines are also collapsed to one so the stored markdown stays
-// clean and blank lines map 1:1 to spacing in the preview/PDF. Fenced code blocks
-// are left untouched so their literal content is never altered.
+// empty paragraphs so they survive round-trips, joined by `\n\n` block
+// separators: "para1\n\n&nbsp;\n\n&nbsp;\n\npara2" = two empty lines.
+// Rewrite each run of blank-ish lines into exactly `max(markers, 1)` plain
+// blank lines, where `markers` is the number of `&nbsp;` marker lines in the
+// run. That keeps the stored markdown clean (no `&nbsp;`) while PRESERVING how
+// many empty lines the author typed — one marker line becomes one blank line,
+// so spacing survives into the preview/PDF and across save/load cycles.
+// Fenced code blocks are left untouched so their literal content is never
+// altered; inline `&nbsp;` inside text lines is preserved.
 function normalizeBlankLineMarkers(markdown: string): string {
   let inFence = false
-  let prevBlank = false
+  let runBlanks = 0
+  let runMarkers = 0
   const out: string[] = []
+  const flushRun = () => {
+    if (runBlanks === 0 && runMarkers === 0) {
+      return
+    }
+    const keep = Math.max(runMarkers, 1)
+    for (let i = 0; i < keep; i++) {
+      out.push('')
+    }
+    runBlanks = 0
+    runMarkers = 0
+  }
   for (const line of markdown.split('\n')) {
     if (/^\s*```/.test(line)) {
+      flushRun()
       inFence = !inFence
-      prevBlank = false
       out.push(line)
       continue
     }
@@ -41,21 +55,19 @@ function normalizeBlankLineMarkers(markdown: string): string {
       out.push(line)
       continue
     }
-    const stripped = line
-      .replace(/&nbsp;/g, '')
-      .replace(/\u00A0/g, '')
-      .trim()
-    if (stripped === '') {
-      if (prevBlank) {
-        continue
-      }
-      prevBlank = true
-      out.push('')
-    } else {
-      prevBlank = false
-      out.push(line)
+    const trimmed = line.trim()
+    if (trimmed === '') {
+      runBlanks += 1
+      continue
     }
+    if (trimmed.replace(/&nbsp;/g, '').replace(/\u00A0/g, '') === '') {
+      runMarkers += 1
+      continue
+    }
+    flushRun()
+    out.push(line)
   }
+  flushRun()
   return out.join('\n')
 }
 

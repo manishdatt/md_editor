@@ -74,20 +74,28 @@ function isRawHtmlFence(language: string): boolean {
   return lang === '{=html}' || lang === 'rawhtml' || lang === 'htmlraw'
 }
 
-// Markdown blank lines collapse to a single block separation when parsed, so
-// they carry no reliable vertical space in HTML/PDF. For each blank line, keep
-// the blank line (it is the block separator markdown needs so the following
-// heading/list still parses) AND prepend a <br> so the author's blank-line
-// spacing survives into the rendered preview and the exported PDF. Fenced
-// code/HTML/SVG blocks are skipped so their literal content is never altered.
+// Markdown blank lines carry no reliable vertical space in HTML/PDF: any run
+// of them collapses to a single block separation. Convert EVERY blank line into
+// an explicit <br> (k blank lines -> k visible empty lines) while KEEPING the
+// blank line itself, because it is the block separator markdown needs so the
+// following heading/list still parses. The first <br> attaches to the previous
+// paragraph (`<p>text<br></p>`) and the rest render as standalone empty lines,
+// so the count matches exactly. Exception: a blank line between two list items
+// is a loose-list separator, not authorial spacing, so it is left untouched.
+// Fenced code/HTML/SVG blocks are skipped so their literal content is never
+// altered.
+const LIST_ITEM_LINE_RE = /^\s*([-*+]|\d{1,9}[.)])\s/
+
 function blankLinesToSpacers(markdown: string): string {
+  const lines = markdown.split('\n')
   let inFence = false
-  let prevBlank = false
+  let lastContentLine: string | null = null
   const out: string[] = []
-  for (const line of markdown.split('\n')) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     if (/^\s*```/.test(line)) {
       inFence = !inFence
-      prevBlank = false
+      lastContentLine = line
       out.push(line)
       continue
     }
@@ -96,15 +104,26 @@ function blankLinesToSpacers(markdown: string): string {
       continue
     }
     if (line.trim() === '') {
-      if (prevBlank) {
-        continue
+      let nextContentLine: string | null = null
+      for (let j = i + 1; j < lines.length; j++) {
+        if (lines[j].trim() !== '') {
+          nextContentLine = lines[j]
+          break
+        }
       }
-      prevBlank = true
-      out.push('<br>')
+      const insideList = Boolean(
+        lastContentLine
+        && nextContentLine
+        && LIST_ITEM_LINE_RE.test(lastContentLine)
+        && LIST_ITEM_LINE_RE.test(nextContentLine)
+      )
+      if (!insideList) {
+        out.push('<br>')
+      }
       out.push('')
       continue
     }
-    prevBlank = false
+    lastContentLine = line
     out.push(line)
   }
   return out.join('\n')
