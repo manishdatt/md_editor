@@ -82,7 +82,8 @@ function emojifyMarkdown(markdown: string): string {
 // their body as live HTML instead of a highlighted code block.
 function isRawHtmlFence(language: string): boolean {
   const lang = String(language || '').trim().toLowerCase()
-  return lang === '{=html}' || lang === 'rawhtml' || lang === 'htmlraw'
+  const normalized = lang.replace(/^\{/, '').replace(/\}$/, '')
+  return normalized === '=html' || normalized === 'html' || normalized === 'rawhtml' || normalized === 'htmlraw'
 }
 
 // Markdown itself treats repeated blank lines as one block separator. During

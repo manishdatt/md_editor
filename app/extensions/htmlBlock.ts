@@ -4,7 +4,8 @@ import HtmlBlockView from '~/components/editor/HtmlBlockView.vue'
 
 function isRawHtmlFence(language: string): boolean {
   const lang = String(language || '').trim().toLowerCase()
-  return lang === '{=html}' || lang === 'rawhtml' || lang === 'htmlraw'
+  const normalized = lang.replace(/^\{/, '').replace(/\}$/, '')
+  return normalized === '=html' || normalized === 'html' || normalized === 'rawhtml' || normalized === 'htmlraw'
 }
 
 export const HtmlBlock = Node.create({
@@ -50,7 +51,7 @@ export const HtmlBlock = Node.create({
   markdownTokenName: 'code',
 
   parseMarkdown(token, helpers) {
-    if (!isRawHtmlFence(token.lang)) {
+    if (!isRawHtmlFence(String(token.lang || ''))) {
       return []
     }
 

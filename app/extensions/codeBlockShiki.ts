@@ -29,7 +29,9 @@ export const CodeBlockShiki = CodeBlock.extend({
 
   parseMarkdown(token, helpers) {
     // svg/mermaid fences belong to their dedicated blocks
-    if (token.lang === 'mermaid' || token.lang === 'svg') {
+    const language = String(token.lang || '').trim().toLowerCase()
+    const normalizedLanguage = language.replace(/^\{/, '').replace(/\}$/, '')
+    if (normalizedLanguage === 'mermaid' || normalizedLanguage === 'svg' || normalizedLanguage === '=html' || normalizedLanguage === 'html' || normalizedLanguage === 'rawhtml' || normalizedLanguage === 'htmlraw') {
       return []
     }
 
