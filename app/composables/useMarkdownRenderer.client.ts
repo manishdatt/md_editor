@@ -75,30 +75,39 @@ function isRawHtmlFence(language: string): boolean {
 }
 
 // Markdown blank lines collapse to a single block separation when parsed, so
-// they carry no reliable vertical space in HTML/PDF. Turn each blank line into an
-// explicit <br> so the author's blank-line spacing survives into the rendered
-// preview and the exported PDF. A <br> (not a <div>) is used on purpose: a raw
-// <div> opens an HTML block that swallows the following heading/list until the
-// next blank line. Fenced code/HTML/SVG blocks are skipped so their literal
-// content is never altered.
+// they carry no reliable vertical space in HTML/PDF. For each blank line, keep
+// the blank line (it is the block separator markdown needs so the following
+// heading/list still parses) AND prepend a <br> so the author's blank-line
+// spacing survives into the rendered preview and the exported PDF. Fenced
+// code/HTML/SVG blocks are skipped so their literal content is never altered.
 function blankLinesToSpacers(markdown: string): string {
   let inFence = false
-  return markdown
-    .split('\n')
-    .map((line) => {
-      if (/^\s*```/.test(line)) {
-        inFence = !inFence
-        return line
+  let prevBlank = false
+  const out: string[] = []
+  for (const line of markdown.split('\n')) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence
+      prevBlank = false
+      out.push(line)
+      continue
+    }
+    if (inFence) {
+      out.push(line)
+      continue
+    }
+    if (line.trim() === '') {
+      if (prevBlank) {
+        continue
       }
-      if (inFence) {
-        return line
-      }
-      if (line.trim() === '') {
-        return '<br>'
-      }
-      return line
-    })
-    .join('\n')
+      prevBlank = true
+      out.push('<br>')
+      out.push('')
+      continue
+    }
+    prevBlank = false
+    out.push(line)
+  }
+  return out.join('\n')
 }
 
 // Split markdown into top-level block chunks (blank-line separated, fence aware).
