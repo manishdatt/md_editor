@@ -18,72 +18,33 @@ export interface AlignmentDirective {
 const TRAILING_MARKER_RE = /^\s*<!--\s*alignment:\s*(\{[^\n]*\})\s*-->\s*$/
 const LEGACY_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 
-// TipTap's markdown serializer emits `&nbsp;` (or a raw non-breaking space) for
-// empty paragraphs so they survive round-trips, joined by `\n\n` block
-// separators: "para1\n\n&nbsp;\n\n&nbsp;\n\npara2" = two empty lines, while a
-// plain "para1\n\npara2" separator is NOT an intentional empty line.
-// Encode the difference so the preview can tell them apart: every run of
-// blank-ish lines becomes `markers + 1` plain blank lines (markers = number of
-// `&nbsp;` lines in the run). A pure separator stays 1 blank line (= 0 gaps);
-// each empty paragraph adds exactly one blank line (= 1 gap). The preview side
-// (blankLinesToSpacers) mirrors this by rendering B consecutive blanks as B-1
-// visible spacers. Keeps stored markdown clean of `&nbsp;` while preserving
-// how many empty lines the author typed. Fenced code blocks are untouched;
-// inline `&nbsp;` inside text lines is preserved.
-function normalizeBlankLineMarkers(markdown: string): string {
-  let inFence = false
-  let runBlanks = 0
-  let runMarkers = 0
-  const out: string[] = []
-  const flushRun = () => {
-    if (runBlanks === 0 && runMarkers === 0) {
-      return
-    }
-    const keep = runMarkers + 1
-    for (let i = 0; i < keep; i++) {
-      out.push('')
-    }
-    runBlanks = 0
-    runMarkers = 0
-  }
-  for (const line of markdown.split('\n')) {
-    if (/^\s*```/.test(line)) {
-      flushRun()
-      inFence = !inFence
-      out.push(line)
-      continue
-    }
-    if (inFence) {
-      out.push(line)
-      continue
-    }
-    const trimmed = line.trim()
-    if (trimmed === '') {
-      runBlanks += 1
-      continue
-    }
-    if (trimmed.replace(/&nbsp;/g, '').replace(/\u00A0/g, '') === '') {
-      runMarkers += 1
-      continue
-    }
-    flushRun()
-    out.push(line)
-  }
-  flushRun()
-  return out.join('\n')
-}
+// STORAGE FORMAT (deliberate): documents are persisted in TipTap's NATIVE
+// markdown form — the serializer emits one `&nbsp;` marker line per empty
+// paragraph, joined by `\n\n` separators:
+//   "para1\n\n&nbsp;\n\n&nbsp;\n\npara2" = two intentional empty lines.
+// This is the ONLY representation the library reconstructs losslessly
+// (parseImplicitEmptyParagraphs counts `\n\n` pairs for plain blank runs,
+// which silently decays typed spacing across save/load cycles). Storing the
+// canonical form makes round-trips deterministic BY CONSTRUCTION — no entry
+// point can degrade a document even if it forgets to call
+// expandBlankRunsForParse. One `&nbsp;` line = exactly one blank line.
+// expandBlankRunsForParse remains on every load path purely as a MIGRATION
+// shim: it converts older blank-line-encoded saves and preserves spacing in
+// hand-authored files, and is an identity function on canonical input.
+// serializeWithAlignment therefore stores the raw serializer output.
 
 const LIST_ITEM_LINE_RE = /^\s*([-*+]|\d{1,9}[.)])\s/
 
 // Stored documents encode B consecutive blank lines as B-1 intentional empty
-// paragraphs (see normalizeBlankLineMarkers). The markdown loader rebuilds
-// empty paragraphs by COUNTING `\n\n` separators in whitespace runs
-// (parseImplicitEmptyParagraphs), which is lossy for plain blank-line runs —
-// typed spacing decays on every save/load cycle. Call this BEFORE setContent:
-// it re-expands each run into the library's canonical lossless form (explicit
-// `&nbsp;` marker paragraphs), so the parser rebuilds exactly B-1 empty
-// paragraphs. The stored file itself is never touched. Fences are skipped and
-// loose-list separators (blank line between two list items) are left alone.
+// paragraphs (older blank-line-encoded saves and hand-authored files). The
+// markdown loader rebuilds empty paragraphs by COUNTING `\n\n` separators in
+// whitespace runs (parseImplicitEmptyParagraphs), which is lossy for plain
+// blank-line runs. Call this BEFORE setContent: it re-expands each run into
+// the library's canonical lossless form (explicit `&nbsp;` marker
+// paragraphs), so the parser rebuilds exactly B-1 empty paragraphs.
+// IDEMPOTENT on canonical storage (single blank separators are untouched),
+// so it is always safe to call. Fences are skipped and loose-list separators
+// (blank line between two list items) are left alone.
 export function expandBlankRunsForParse(markdown: string): string {
   const lines = markdown.split('\n')
   let inFence = false
@@ -154,10 +115,11 @@ export function expandBlankRunsForParse(markdown: string): string {
 
 // Persist non-default alignment as a single trailing marker line appended to
 // the standard Tiptap serialization. Lossless: the base markdown is produced
-// entirely by the built-in serializer; the marker is recomputed from the
-// current document state on every save.
+// entirely by the built-in serializer and stored VERBATIM (canonical storage
+// format — see the comment above expandBlankRunsForParse); the marker is
+// recomputed from the current document state on every save.
 export function serializeWithAlignment(editor: Editor): string {
-  const base = normalizeBlankLineMarkers(editor.getMarkdown())
+  const base = editor.getMarkdown()
   const directives: Record<number, AlignValue> = {}
   editor.state.doc.forEach((node: PMNode, _offset: number, index: number) => {
     const align = (node.attrs?.textAlign as string | undefined) || ''

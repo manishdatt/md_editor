@@ -667,9 +667,13 @@ function setLink() {
 }
 
 function initializeEditor() {
+  // Initial content goes through the same pipeline as loadDocument: strip the
+  // alignment marker and expand blank-line runs from older saves into the
+  // canonical lossless form before the markdown parser sees them.
+  const { clean: initialClean } = extractAlignment(markdown.value)
   editor.value = new Editor({
     contentType: 'markdown',
-    content: markdown.value,
+    content: expandBlankRunsForParse(initialClean),
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({
