@@ -13,7 +13,7 @@ import { HtmlBlock } from '~/extensions/htmlBlock'
 import { RawHtmlText } from '~/extensions/rawHtmlText'
 import { AiGhostText } from '~/extensions/aiGhostText'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
-import { serializeWithAlignment, extractAlignment, applyAlignmentDirectives, expandBlankRunsForParse } from '~/utils/markdownAlignment'
+import { serializeWithAlignment, extractAlignment, applyAlignmentDirectives, expandBlankRunsForParse, normalizeMarkdownForStorage } from '~/utils/markdownAlignment'
 import { authClient } from '~/lib/auth-client'
 
 type DocumentFormat = 'markdown' | 'typst'
@@ -62,6 +62,7 @@ const isApplyingContent = ref(false)
 let activeSave: Promise<void> | null = null
 let activeModeKey = ''
 let onThemeChanged: (() => void) | null = null
+let previewRevision = 0
 
 // Public share-link state for the current document
 const runtimeConfig = useRuntimeConfig()
@@ -140,7 +141,7 @@ async function loadDocument(id: string) {
 
   // Alignments live in one trailing marker line; strip it for the editor and
   // re-apply as node attributes. Everything else passes through byte-for-byte.
-  const { clean, directives } = extractAlignment(response.document.content)
+  const { clean, directives } = extractAlignment(normalizeMarkdownForStorage(response.document.content))
   markdown.value = clean
 
   // Share state for the newly opened document
@@ -233,7 +234,13 @@ async function flushSaveQueue() {
 }
 
 async function refreshPreview() {
-  previewHtml.value = await renderToHtml(markdown.value)
+  const revision = ++previewRevision
+  const html = await renderToHtml(markdown.value)
+  if (revision !== previewRevision) {
+    return
+  }
+
+  previewHtml.value = html
   await nextTick()
 
   if (previewRef.value) {
@@ -593,7 +600,7 @@ async function onMarkdownFileSelected(event: Event) {
     return
   }
 
-  const content = await file.text()
+  const content = normalizeMarkdownForStorage(await file.text())
   markdown.value = content
 
   if (docFormat.value === 'typst') {
@@ -620,7 +627,7 @@ async function onMarkdownFileSelected(event: Event) {
   }
 
   if (isAuthenticatedMode.value && currentDocId.value) {
-    scheduleSave(content)
+    scheduleSave(markdown.value)
   }
   await refreshPreview()
 
@@ -670,7 +677,7 @@ function initializeEditor() {
   // Initial content goes through the same pipeline as loadDocument: strip the
   // alignment marker and expand blank-line runs from older saves into the
   // canonical lossless form before the markdown parser sees them.
-  const { clean: initialClean } = extractAlignment(markdown.value)
+  const { clean: initialClean } = extractAlignment(normalizeMarkdownForStorage(markdown.value))
   editor.value = new Editor({
     contentType: 'markdown',
     content: expandBlankRunsForParse(initialClean),
@@ -754,7 +761,7 @@ async function initializePublicMode() {
   }
 
   if (editor.value) {
-    const { clean, directives } = extractAlignment(markdown.value)
+    const { clean, directives } = extractAlignment(normalizeMarkdownForStorage(markdown.value))
     isApplyingContent.value = true
     try {
       editor.value.commands.setContent(expandBlankRunsForParse(clean), { contentType: 'markdown' })

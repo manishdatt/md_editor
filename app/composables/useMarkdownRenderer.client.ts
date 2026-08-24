@@ -1,5 +1,5 @@
 import { useShikiHighlighter } from '~/composables/useShikiHighlighter.client'
-import { extractAlignment, type AlignmentDirective } from '~/utils/markdownAlignment'
+import { extractAlignment, normalizeMarkdownForStorage, type AlignmentDirective } from '~/utils/markdownAlignment'
 import { sanitizeHtml } from '~/utils/sanitizeHtml'
 import { gemoji } from 'gemoji'
 
@@ -85,71 +85,13 @@ function isRawHtmlFence(language: string): boolean {
   return lang === '{=html}' || lang === 'rawhtml' || lang === 'htmlraw'
 }
 
-// Markdown blank lines carry no reliable vertical space in HTML/PDF: any run
-// of them collapses to a single block separation. A run of B consecutive blank
-// lines encodes B-1 INTENTIONAL empty lines (see normalizeBlankLineMarkers:
-// the serializer's plain `\n\n` block separator is 1 blank = 0 gaps; each
-// editor empty paragraph adds one more). Emit one explicit <br> per gap while
-// KEEPING a blank line, because it is the block separator markdown needs so
-// the following heading/list still parses. The first <br> attaches to the
-// previous paragraph (`<p>text<br></p>`) and the rest render as standalone
-// empty lines, so the visible count matches exactly. Exception: a run between
-// two list items is a loose-list separator, not authorial spacing, so it is
-// left untouched. Fenced code/HTML/SVG blocks are skipped so their literal
-// content is never altered.
+// Markdown itself treats repeated blank lines as one block separator. During
+// rendering only, convert the additional authored gaps into explicit spacer
+// elements. This keeps persisted Markdown canonical while making preview and
+// PDF spacing deterministic.
 const LIST_ITEM_LINE_RE = /^\s*([-*+]|\d{1,9}[.)])\s/
 
-// Shared links render the RAW stored markdown, while the editor normalizes
-// legacy `&nbsp;` empty-paragraph markers when loading — so documents saved by
-// older builds spaced differently on the public share page than in the app
-// preview. Canonicalize marker runs into the plain blank-line encoding here
-// (display only, mirrors normalizeBlankLineMarkers) so every rendering surface
-// converges regardless of when the document was last saved. Pure blank-line
-// runs from hand-authored files are kept verbatim; fences are untouched.
-function canonicalizeStoredMarkers(markdown: string): string {
-  let inFence = false
-  let runBlanks = 0
-  let runMarkers = 0
-  const out: string[] = []
-  const flushRun = () => {
-    if (runBlanks === 0 && runMarkers === 0) {
-      return
-    }
-    const keep = runMarkers > 0 ? runMarkers + 1 : runBlanks
-    for (let i = 0; i < keep; i++) {
-      out.push('')
-    }
-    runBlanks = 0
-    runMarkers = 0
-  }
-  for (const line of markdown.split('\n')) {
-    if (/^\s*```/.test(line)) {
-      flushRun()
-      inFence = !inFence
-      out.push(line)
-      continue
-    }
-    if (inFence) {
-      out.push(line)
-      continue
-    }
-    const trimmed = line.trim()
-    if (trimmed === '') {
-      runBlanks += 1
-      continue
-    }
-    if (trimmed.replace(/&nbsp;/g, '').replace(/\u00A0/g, '') === '') {
-      runMarkers += 1
-      continue
-    }
-    flushRun()
-    out.push(line)
-  }
-  flushRun()
-  return out.join('\n')
-}
-
-function blankLinesToSpacers(markdown: string): string {
+function renderBlankLineGaps(markdown: string): string {
   const lines = markdown.split('\n')
   let inFence = false
   let lastContentLine: string | null = null
@@ -187,7 +129,7 @@ function blankLinesToSpacers(markdown: string): string {
       const gaps = Math.max(runEnd - i - 1, 0)
       if (!insideList) {
         for (let g = 0; g < gaps; g++) {
-          out.push('<br>')
+          out.push('<div class="markdown-spacer" aria-hidden="true"></div>')
           out.push('')
         }
         out.push('')
@@ -353,8 +295,8 @@ export function useMarkdownRenderer() {
     // shortcodes like :white\_check\_mark:. Canonicalize legacy `&nbsp;`
     // markers before parsing so stored content renders exactly like the
     // editor's normalized live preview.
-    const { clean, directives } = extractAlignment(canonicalizeStoredMarkers(emojifyMarkdown(markdown)))
-    const displayMarkdown = blankLinesToSpacers(wrapAlignedBlocks(clean, directives))
+    const { clean, directives } = extractAlignment(normalizeMarkdownForStorage(emojifyMarkdown(markdown)))
+    const displayMarkdown = renderBlankLineGaps(wrapAlignedBlocks(clean, directives))
 
     return sanitizeHtml(String(marked.parse(displayMarkdown, {
       gfm: true,

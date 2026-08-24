@@ -18,22 +18,74 @@ export interface AlignmentDirective {
 const TRAILING_MARKER_RE = /^\s*<!--\s*alignment:\s*(\{[^\n]*\})\s*-->\s*$/
 const LEGACY_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 
-// STORAGE FORMAT (deliberate): documents are persisted in TipTap's NATIVE
-// markdown form — the serializer emits one `&nbsp;` marker line per empty
-// paragraph, joined by `\n\n` separators:
-//   "para1\n\n&nbsp;\n\n&nbsp;\n\npara2" = two intentional empty lines.
-// This is the ONLY representation the library reconstructs losslessly
-// (parseImplicitEmptyParagraphs counts `\n\n` pairs for plain blank runs,
-// which silently decays typed spacing across save/load cycles). Storing the
-// canonical form makes round-trips deterministic BY CONSTRUCTION — no entry
-// point can degrade a document even if it forgets to call
-// expandBlankRunsForParse. One `&nbsp;` line = exactly one blank line.
-// expandBlankRunsForParse remains on every load path purely as a MIGRATION
-// shim: it converts older blank-line-encoded saves and preserves spacing in
-// hand-authored files, and is an identity function on canonical input.
-// serializeWithAlignment therefore stores the raw serializer output.
+// STORAGE FORMAT: documents are persisted as canonical Markdown with LF line
+// endings and ordinary blank-line runs. TipTap's `&nbsp;` empty-paragraph form
+// is used only when feeding content into the parser, because the parser needs
+// explicit empty paragraphs to reconstruct repeated spacing. It must never be
+// emitted as the long-term storage format.
 
 const LIST_ITEM_LINE_RE = /^\s*([-*+]|\d{1,9}[.)])\s/
+
+const EMPTY_PARAGRAPH_MARKER_RE = /^\s*(?:&nbsp;|\u00a0)\s*$/i
+
+/**
+ * Normalize content at the persistence boundary.
+ *
+ * This is deliberately idempotent. It converts legacy TipTap empty-paragraph
+ * marker lines back to ordinary blank-line runs, while leaving fenced code and
+ * legitimate non-breaking spaces untouched.
+ */
+export function normalizeMarkdownForStorage(markdown: string): string {
+  const normalized = String(markdown || '').replace(/\r\n?/g, '\n')
+  const lines = normalized.split('\n')
+  const out: string[] = []
+  let inFence = false
+  let blankCount = 0
+  let markerCount = 0
+
+  const flush = () => {
+    if (blankCount === 0 && markerCount === 0) {
+      return
+    }
+
+    const count = markerCount > 0 ? markerCount + 1 : blankCount
+    for (let i = 0; i < count; i += 1) {
+      out.push('')
+    }
+    blankCount = 0
+    markerCount = 0
+  }
+
+  for (const line of lines) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      flush()
+      inFence = !inFence
+      out.push(line)
+      continue
+    }
+
+    if (inFence) {
+      out.push(line)
+      continue
+    }
+
+    if (line.trim() === '') {
+      blankCount += 1
+      continue
+    }
+
+    if (EMPTY_PARAGRAPH_MARKER_RE.test(line)) {
+      markerCount += 1
+      continue
+    }
+
+    flush()
+    out.push(line)
+  }
+
+  flush()
+  return out.join('\n')
+}
 
 // Stored documents encode B consecutive blank lines as B-1 intentional empty
 // paragraphs (older blank-line-encoded saves and hand-authored files). The
@@ -114,12 +166,10 @@ export function expandBlankRunsForParse(markdown: string): string {
 }
 
 // Persist non-default alignment as a single trailing marker line appended to
-// the standard Tiptap serialization. Lossless: the base markdown is produced
-// entirely by the built-in serializer and stored VERBATIM (canonical storage
-// format — see the comment above expandBlankRunsForParse); the marker is
-// recomputed from the current document state on every save.
+// the canonical Markdown serialization. The alignment marker is recomputed
+// from the current document state on every save.
 export function serializeWithAlignment(editor: Editor): string {
-  const base = editor.getMarkdown()
+  const base = normalizeMarkdownForStorage(editor.getMarkdown())
   const directives: Record<number, AlignValue> = {}
   editor.state.doc.forEach((node: PMNode, _offset: number, index: number) => {
     const align = (node.attrs?.textAlign as string | undefined) || ''
