@@ -74,6 +74,33 @@ function isRawHtmlFence(language: string): boolean {
   return lang === '{=html}' || lang === 'rawhtml' || lang === 'htmlraw'
 }
 
+// Markdown blank lines collapse to a single block separation when parsed, so
+// they carry no reliable vertical space in HTML/PDF. Turn each blank line into an
+// explicit <br> so the author's blank-line spacing survives into the rendered
+// preview and the exported PDF. A <br> (not a <div>) is used on purpose: a raw
+// <div> opens an HTML block that swallows the following heading/list until the
+// next blank line. Fenced code/HTML/SVG blocks are skipped so their literal
+// content is never altered.
+function blankLinesToSpacers(markdown: string): string {
+  let inFence = false
+  return markdown
+    .split('\n')
+    .map((line) => {
+      if (/^\s*```/.test(line)) {
+        inFence = !inFence
+        return line
+      }
+      if (inFence) {
+        return line
+      }
+      if (line.trim() === '') {
+        return '<br>'
+      }
+      return line
+    })
+    .join('\n')
+}
+
 // Split markdown into top-level block chunks (blank-line separated, fence aware).
 // Display-only: used to wrap aligned blocks in styled divs for the preview.
 function splitTopLevelBlocks(markdown: string): string[] {
@@ -204,7 +231,7 @@ export function useMarkdownRenderer() {
     // itself is never rewritten for style. (Previous normalize/restore passes
     // rewrote the whole document and were a corruption source.)
     const { clean, directives } = extractAlignment(markdown)
-    const displayMarkdown = wrapAlignedBlocks(clean, directives)
+    const displayMarkdown = blankLinesToSpacers(wrapAlignedBlocks(clean, directives))
 
     return sanitizeHtml(String(marked.parse(displayMarkdown, {
       gfm: true,

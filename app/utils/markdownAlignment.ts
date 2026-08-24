@@ -23,26 +23,40 @@ const LEGACY_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 // markers: they pollute the markdown source and render inconsistently in print/PDF.
 // Collapse them to genuine blank lines. The parser rebuilds empty paragraphs from
 // blank lines (parseImplicitEmptyParagraphs), so the document round-trip stays intact.
-// Fenced code blocks are left untouched so their literal content is never altered.
+// Consecutive blank lines are also collapsed to one so the stored markdown stays
+// clean and blank lines map 1:1 to spacing in the preview/PDF. Fenced code blocks
+// are left untouched so their literal content is never altered.
 function normalizeBlankLineMarkers(markdown: string): string {
   let inFence = false
-  return markdown
-    .split('\n')
-    .map((line) => {
-      if (/^\s*```/.test(line)) {
-        inFence = !inFence
-        return line
+  let prevBlank = false
+  const out: string[] = []
+  for (const line of markdown.split('\n')) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence
+      prevBlank = false
+      out.push(line)
+      continue
+    }
+    if (inFence) {
+      out.push(line)
+      continue
+    }
+    const stripped = line
+      .replace(/&nbsp;/g, '')
+      .replace(/\u00A0/g, '')
+      .trim()
+    if (stripped === '') {
+      if (prevBlank) {
+        continue
       }
-      if (inFence) {
-        return line
-      }
-      const stripped = line
-        .replace(/&nbsp;/g, '')
-        .replace(/\u00A0/g, '')
-        .trim()
-      return stripped === '' ? '' : line
-    })
-    .join('\n')
+      prevBlank = true
+      out.push('')
+    } else {
+      prevBlank = false
+      out.push(line)
+    }
+  }
+  return out.join('\n')
 }
 
 // Persist non-default alignment as a single trailing marker line appended to
