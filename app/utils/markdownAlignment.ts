@@ -73,6 +73,85 @@ function normalizeBlankLineMarkers(markdown: string): string {
   return out.join('\n')
 }
 
+const LIST_ITEM_LINE_RE = /^\s*([-*+]|\d{1,9}[.)])\s/
+
+// Stored documents encode B consecutive blank lines as B-1 intentional empty
+// paragraphs (see normalizeBlankLineMarkers). The markdown loader rebuilds
+// empty paragraphs by COUNTING `\n\n` separators in whitespace runs
+// (parseImplicitEmptyParagraphs), which is lossy for plain blank-line runs —
+// typed spacing decays on every save/load cycle. Call this BEFORE setContent:
+// it re-expands each run into the library's canonical lossless form (explicit
+// `&nbsp;` marker paragraphs), so the parser rebuilds exactly B-1 empty
+// paragraphs. The stored file itself is never touched. Fences are skipped and
+// loose-list separators (blank line between two list items) are left alone.
+export function expandBlankRunsForParse(markdown: string): string {
+  const lines = markdown.split('\n')
+  let inFence = false
+  let lastContentLine: string | null = null
+  const out: string[] = []
+
+  const emitRun = (runLength: number, nextContentLine: string | null) => {
+    const insideList = Boolean(
+      lastContentLine
+      && nextContentLine
+      && LIST_ITEM_LINE_RE.test(lastContentLine)
+      && LIST_ITEM_LINE_RE.test(nextContentLine)
+    )
+    if (insideList) {
+      for (let i = 0; i < runLength; i++) {
+        out.push('')
+      }
+      return
+    }
+    const empties = Math.max(runLength - 1, 0)
+    // One retained blank line separates the previous block from the first
+    // marker (markdown needs it), then each `&nbsp;` marker is followed by its
+    // own blank line — reproducing the serializer's canonical layout exactly:
+    // "para1\n\n&nbsp;\n\n&nbsp;\n\npara2".
+    out.push('')
+    for (let e = 0; e < empties; e++) {
+      out.push('&nbsp;')
+      out.push('')
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence
+      lastContentLine = line
+      out.push(line)
+      continue
+    }
+    if (inFence) {
+      out.push(line)
+      continue
+    }
+    if (line.trim() === '') {
+      let runEnd = i
+      while (runEnd < lines.length && lines[runEnd].trim() === '') {
+        runEnd += 1
+      }
+      let nextContentLine: string | null = null
+      for (let j = runEnd; j < lines.length; j++) {
+        if (/^\s*```/.test(lines[j])) {
+          break
+        }
+        if (lines[j].trim() !== '') {
+          nextContentLine = lines[j]
+          break
+        }
+      }
+      emitRun(runEnd - i, nextContentLine)
+      i = runEnd - 1
+      continue
+    }
+    lastContentLine = line
+    out.push(line)
+  }
+  return out.join('\n')
+}
+
 // Persist non-default alignment as a single trailing marker line appended to
 // the standard Tiptap serialization. Lossless: the base markdown is produced
 // entirely by the built-in serializer; the marker is recomputed from the

@@ -155,17 +155,26 @@ function blankLinesToSpacers(markdown: string): string {
   return out.join('\n')
 }
 
-// Split markdown into top-level block chunks (blank-line separated, fence aware).
-// Display-only: used to wrap aligned blocks in styled divs for the preview.
-function splitTopLevelBlocks(markdown: string): string[] {
-  const chunks: string[] = []
+// Split markdown into top-level block chunks (blank-line separated, fence
+// aware), PRESERVING the exact blank-line runs between chunks: those runs
+// encode intentional vertical spacing (see blankLinesToSpacers) and must not
+// collapse when chunks are reassembled by wrapAlignedBlocks.
+interface TopLevelChunk {
+  text: string
+  separatorBefore: string
+}
+
+function splitTopLevelChunks(markdown: string): { chunks: TopLevelChunk[], trailingSeparator: string } {
+  const chunks: TopLevelChunk[] = []
   const lines = markdown.split('\n')
   let fence = false
   let current: string[] = []
+  let pendingSeparator = ''
   const flush = () => {
     if (current.length > 0) {
-      chunks.push(current.join('\n'))
+      chunks.push({ text: current.join('\n'), separatorBefore: pendingSeparator })
       current = []
+      pendingSeparator = ''
     }
   }
   for (const line of lines) {
@@ -175,34 +184,43 @@ function splitTopLevelBlocks(markdown: string): string[] {
       continue
     }
     if (!fence && line.trim() === '') {
+      // The separator must reproduce the source bytes: the newline that ends
+      // the previous content line (only for the FIRST blank after content)
+      // plus one newline per blank line.
+      const endsContentLine = current.length > 0
       flush()
+      if (endsContentLine) {
+        pendingSeparator += '\n'
+      }
+      pendingSeparator += '\n'
       continue
     }
     current.push(line)
   }
   flush()
-  return chunks
+  return { chunks, trailingSeparator: pendingSeparator }
 }
 
 // Wrap aligned blocks in styled divs for display. This is purely presentational
 // and runs only on the preview input — it NEVER touches persisted content, so
 // it cannot corrupt documents across renders (unlike the previous whole-doc
-// markdown-rewriting pipeline).
+// markdown-rewriting pipeline). Blank-line runs between chunks are re-emitted
+// verbatim so authored spacing survives alignment wrapping.
 function wrapAlignedBlocks(markdown: string, directives: AlignmentDirective[]): string {
   if (directives.length === 0) {
     return markdown
   }
-  const chunks = splitTopLevelBlocks(markdown)
+  const { chunks, trailingSeparator } = splitTopLevelChunks(markdown)
   const alignByIndex = new Map(directives.map((d) => [d.index, d.align]))
-  return chunks
-    .map((chunk, index) => {
-      const align = alignByIndex.get(index)
-      if (!align || /^\s*(```|~~~)/.test(chunk)) {
-        return chunk
-      }
-      return `<div style="text-align:${align}">\n\n${chunk}\n\n</div>`
-    })
-    .join('\n\n')
+  let out = ''
+  chunks.forEach((chunk, index) => {
+    const align = alignByIndex.get(index)
+    const text = align && !/^\s*(```|~~~)/.test(chunk.text)
+      ? `<div style="text-align:${align}">\n\n${chunk.text}\n\n</div>`
+      : chunk.text
+    out += chunk.separatorBefore + text
+  })
+  return out + trailingSeparator
 }
 
 export function useMarkdownRenderer() {

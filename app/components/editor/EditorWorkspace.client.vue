@@ -13,7 +13,7 @@ import { HtmlBlock } from '~/extensions/htmlBlock'
 import { RawHtmlText } from '~/extensions/rawHtmlText'
 import { AiGhostText } from '~/extensions/aiGhostText'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
-import { serializeWithAlignment, extractAlignment, applyAlignmentDirectives } from '~/utils/markdownAlignment'
+import { serializeWithAlignment, extractAlignment, applyAlignmentDirectives, expandBlankRunsForParse } from '~/utils/markdownAlignment'
 import { authClient } from '~/lib/auth-client'
 
 type DocumentFormat = 'markdown' | 'typst'
@@ -155,7 +155,7 @@ async function loadDocument(id: string) {
   if (editor.value && docFormat.value === 'markdown') {
     isApplyingContent.value = true
     try {
-      editor.value.commands.setContent(clean, { contentType: 'markdown' })
+      editor.value.commands.setContent(expandBlankRunsForParse(clean), { contentType: 'markdown' })
       applyAlignmentDirectives(editor.value, directives)
     } finally {
       isApplyingContent.value = false
@@ -611,7 +611,7 @@ async function onMarkdownFileSelected(event: Event) {
     const { clean, directives } = extractAlignment(content)
     isApplyingContent.value = true
     try {
-      editor.value.commands.setContent(clean, { contentType: 'markdown' })
+      editor.value.commands.setContent(expandBlankRunsForParse(clean), { contentType: 'markdown' })
       applyAlignmentDirectives(editor.value, directives)
     } finally {
       isApplyingContent.value = false
@@ -753,7 +753,7 @@ async function initializePublicMode() {
     const { clean, directives } = extractAlignment(markdown.value)
     isApplyingContent.value = true
     try {
-      editor.value.commands.setContent(clean, { contentType: 'markdown' })
+      editor.value.commands.setContent(expandBlankRunsForParse(clean), { contentType: 'markdown' })
       applyAlignmentDirectives(editor.value, directives)
     } finally {
       isApplyingContent.value = false
