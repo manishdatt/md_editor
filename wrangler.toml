@@ -5,3 +5,4 @@ pages_build_output_dir = "dist"
 
 [vars]
 NUXT_PUBLIC_SITE_URL = "https://shbd.bioinfo.guru"
+ADMIN_EMAILS = "support@bioinfo.guru"

@@ -50,6 +50,7 @@ export default defineNuxtConfig({
     nvidiaModel: process.env.NUXT_NVIDIA_MODEL || 'meta/llama-3.1-8b-instruct',
     pdfServiceUrl: process.env.NUXT_PDF_SERVICE_URL || '',
     pdfServiceKey: process.env.NUXT_PDF_SERVICE_KEY || '',
+    adminEmails: process.env.ADMIN_EMAILS || '',
     public: {
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://shbd.bioinfo.guru'
     }
