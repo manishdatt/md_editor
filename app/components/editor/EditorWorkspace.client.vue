@@ -141,8 +141,9 @@ async function loadDocument(id: string) {
 
   // Alignments live in one trailing marker line; strip it for the editor and
   // re-apply as node attributes. Everything else passes through byte-for-byte.
-  const { clean, directives } = extractAlignment(normalizeMarkdownForStorage(response.document.content))
-  markdown.value = clean
+  const normalizedRaw = normalizeMarkdownForStorage(response.document.content)
+  const { clean, directives } = extractAlignment(normalizedRaw)
+  markdown.value = normalizedRaw
 
   // Share state for the newly opened document
   shareToken.value = response.document.shareToken || ''
