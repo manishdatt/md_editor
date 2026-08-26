@@ -6,5 +6,5 @@ pages_build_output_dir = "dist"
 [vars]
 NUXT_PUBLIC_SITE_URL = "https://shbd.bioinfo.guru"
 ADMIN_EMAILS = "support@bioinfo.guru"
-NUXT_PDF_SERVICE_URL="https://md-editor-git-334484896562.us-central1.run.app"
-NUXT_NVIDIA_MODEL="meta/llama-3.1-8b-instruct"
+NUXT_PDF_SERVICE_URL = "https://md-editor-git-334484896562.us-central1.run.app"
+NUXT_NVIDIA_MODEL = "meta/llama-3.1-8b-instruct"
