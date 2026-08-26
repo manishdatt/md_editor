@@ -137,6 +137,11 @@ function createNvidiaProvider(apiKey: string, model: string): CompletionProvider
           ],
           temperature: 0.3,
           max_tokens: MAX_OUTPUT_TOKENS,
+          reasoning_effort: 'none',
+          chat_template_kwargs: {
+            enable_thinking: false,
+            force_nonempty_content: true
+          },
           stop: ['\n\n\n']
         })
       })
