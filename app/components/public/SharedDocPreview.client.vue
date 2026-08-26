@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
+import { normalizeMarkdownForStorage } from '~/utils/markdownAlignment'
 
 type PublicDoc = {
   title: string
@@ -26,7 +27,12 @@ onMounted(async () => {
 
   const render = async (docData: PublicDoc) => {
     doc.value = docData
-    previewHtml.value = await renderToHtml(docData.content, { hardenLinks: true })
+    // Normalize before rendering: the public page receives raw database content
+    // which may still contain legacy &nbsp; markers or unnormalized blank lines.
+    // The editor path normalizes via serializeWithAlignment before it reaches
+    // renderToHtml; we must do the same here explicitly.
+    const normalizedContent = normalizeMarkdownForStorage(docData.content)
+    previewHtml.value = await renderToHtml(normalizedContent, { hardenLinks: true })
     emit('loaded', docData.title)
     state.value = 'ready'
 

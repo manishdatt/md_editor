@@ -1,5 +1,5 @@
 import { useShikiHighlighter } from '~/composables/useShikiHighlighter.client'
-import { extractAlignment, normalizeMarkdownForStorage, type AlignmentDirective } from '~/utils/markdownAlignment'
+import { extractAlignment, type AlignmentDirective } from '~/utils/markdownAlignment'
 import { sanitizeHtml } from '~/utils/sanitizeHtml'
 import { gemoji } from 'gemoji'
 
@@ -90,6 +90,14 @@ function isRawHtmlFence(language: string): boolean {
 // rendering only, convert the additional authored gaps into explicit spacer
 // elements. This keeps persisted Markdown canonical while making preview and
 // PDF spacing deterministic.
+//
+// NOTE: markdown-spacer divs written by normalizeMarkdownForStorage are
+// already surrounded by blank lines, so renderBlankLineGaps will see them as
+// blank-line runs and inject additional spacer divs for those runs. That is
+// intentional: the stored spacer div IS the extra gap, and the surrounding
+// blanks are structural separators that marked needs. The spacer div line
+// itself is a non-blank content line that terminates a blank run, so it is
+// never double-counted.
 const LIST_ITEM_LINE_RE = /^\s*([-*+]|\d{1,9}[.)])\s/
 
 function renderBlankLineGaps(markdown: string): string {
@@ -134,7 +142,8 @@ function renderBlankLineGaps(markdown: string): string {
           out.push('')
         }
         out.push('')
-      } else {
+      }
+      else {
         for (let k = i; k < runEnd; k++) {
           out.push('')
         }
@@ -150,7 +159,7 @@ function renderBlankLineGaps(markdown: string): string {
 
 // Split markdown into top-level block chunks (blank-line separated, fence
 // aware), PRESERVING the exact blank-line runs between chunks: those runs
-// encode intentional vertical spacing (see blankLinesToSpacers) and must not
+// encode intentional vertical spacing (see renderBlankLineGaps) and must not
 // collapse when chunks are reassembled by wrapAlignedBlocks.
 interface TopLevelChunk {
   text: string
@@ -219,7 +228,19 @@ function wrapAlignedBlocks(markdown: string, directives: AlignmentDirective[]): 
 export function useMarkdownRenderer() {
   const { ensureHighlighter, highlightCode, normalizeLanguage } = useShikiHighlighter()
 
+  // Bug 5 fix: memoize renderToHtml so repeated calls with the same content
+  // (e.g. keystroke → onUpdate → refreshPreview when nothing changed) return
+  // instantly instead of running full O(N) normalization passes again.
+  let lastRenderKey = ''
+  let lastRenderResult = ''
+
   async function renderToHtml(markdown: string, options?: { themeMode?: 'auto' | 'light' | 'dark', hardenLinks?: boolean }) {
+    // Cache key includes options so theme changes still force a re-render.
+    const cacheKey = markdown + '\x00' + JSON.stringify(options ?? {})
+    if (cacheKey === lastRenderKey) {
+      return lastRenderResult
+    }
+
     const { marked } = await import('marked')
     const renderer = new marked.Renderer()
 
@@ -282,7 +303,8 @@ export function useMarkdownRenderer() {
         if (safe !== '#') {
           try {
             encoded = encodeURI(safe).replace(/%25/g, '%')
-          } catch {
+          }
+          catch {
             encoded = '#'
           }
         }
@@ -291,19 +313,28 @@ export function useMarkdownRenderer() {
       }
     }
 
-    // Emojify first (pre-parse): the markdown lexer fragments escaped
+    // Bug 2 fix: do NOT call normalizeMarkdownForStorage here.
+    // The input `markdown` is already normalized — it comes from markdown.value
+    // which is produced by serializeWithAlignment → normalizeMarkdownForStorage.
+    // Calling it a second time caused extractAlignment to miscount trailing blank
+    // lines in documents without an alignment marker, silently dropping spacing.
+    //
+    // Emojify runs before markdown parsing: the lexer fragments escaped
     // underscores into separate tokens, so per-token replacement misses
-    // shortcodes like :white\_check\_mark:. Canonicalize legacy `&nbsp;`
-    // markers before parsing so stored content renders exactly like the
-    // editor's normalized live preview.
-    const { clean, directives } = extractAlignment(normalizeMarkdownForStorage(emojifyMarkdown(markdown)))
+    // shortcodes like :white\_check\_mark:.
+    const emojified = emojifyMarkdown(markdown)
+    const { clean, directives } = extractAlignment(emojified)
     const displayMarkdown = renderBlankLineGaps(wrapAlignedBlocks(clean, directives))
 
-    return sanitizeHtml(String(marked.parse(displayMarkdown, {
+    const result = sanitizeHtml(String(marked.parse(displayMarkdown, {
       gfm: true,
       breaks: false,
       renderer
     })))
+
+    lastRenderKey = cacheKey
+    lastRenderResult = result
+    return result
   }
 
   async function renderMermaidIn(element: HTMLElement) {
@@ -324,7 +355,8 @@ export function useMarkdownRenderer() {
       try {
         const { svg } = await mermaid.render(`mermaid-preview-${index}-${Date.now()}`, source)
         node.innerHTML = svg
-      } catch {
+      }
+      catch {
         // Keep Mermaid source text when syntax is incomplete/invalid.
       }
     }))

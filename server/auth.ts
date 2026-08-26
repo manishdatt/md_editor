@@ -1,11 +1,10 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
-import type { BetterAuth } from 'better-auth'
 import { getRequestURL, type H3Event } from 'h3'
 import { ensureSchema, getDb } from './utils/database'
 import { user, session, account, verification } from './db/schema'
 
-export async function getAuth(event?: H3Event): Promise<BetterAuth> {
+export async function getAuth(event?: H3Event) {
   const config = event ? useRuntimeConfig(event) : useRuntimeConfig()
   const context = event?.context as any
   // Nuxt/Cloudflare can expose bindings through either location depending on

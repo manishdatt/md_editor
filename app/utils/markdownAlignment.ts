@@ -43,15 +43,34 @@ export function normalizeMarkdownForStorage(markdown: string): string {
   let inFence = false
   let blankCount = 0
 
+  // Flush accumulated blank lines into `out`.
   const flush = () => {
     if (blankCount === 0) {
       return
     }
-
     for (let i = 0; i < blankCount; i += 1) {
       out.push('')
     }
     blankCount = 0
+  }
+
+  // Emit a markdown-spacer div surrounded by exactly one blank line on each
+  // side. The blank lines are required so that `marked` (with gfm:true) treats
+  // the div as a block-level HTML element rather than wrapping it in a <p>,
+  // which would add unwanted paragraph margins on top of the spacer height.
+  const emitSpacer = () => {
+    // Discard any accumulated blanks — they will be replaced by the single
+    // blank that we emit explicitly before the div.
+    blankCount = 0
+    // Ensure there is a blank before the spacer (but not if we are at the
+    // very start of the document or immediately after another spacer).
+    if (out.length > 0 && out[out.length - 1] !== '') {
+      out.push('')
+    }
+    out.push(MARKDOWN_SPACER)
+    // Always emit a blank after the spacer so the next content line starts a
+    // new block rather than continuing the spacer's HTML context.
+    out.push('')
   }
 
   for (const line of lines) {
@@ -72,15 +91,15 @@ export function normalizeMarkdownForStorage(markdown: string): string {
       continue
     }
 
+    // Both the legacy &nbsp; form (from old TipTap saves) and the canonical
+    // markdown-spacer form are converted to a properly-padded spacer div.
     if (EMPTY_PARAGRAPH_MARKER_RE.test(line)) {
-      flush()
-      out.push(MARKDOWN_SPACER)
+      emitSpacer()
       continue
     }
 
     if (MARKDOWN_SPACER_RE.test(line)) {
-      flush()
-      out.push(MARKDOWN_SPACER)
+      emitSpacer()
       continue
     }
 
@@ -89,6 +108,13 @@ export function normalizeMarkdownForStorage(markdown: string): string {
   }
 
   flush()
+
+  // Strip a single trailing blank that emitSpacer() may have left at EOF so
+  // documents do not grow a spurious trailing newline on every save cycle.
+  while (out.length > 0 && out[out.length - 1] === '') {
+    out.pop()
+  }
+
   return out.join('\n')
 }
 
@@ -103,17 +129,41 @@ export function normalizeMarkdownForStorage(markdown: string): string {
 // so it is always safe to call. Fences are skipped and loose-list separators
 // (blank line between two list items) are left alone.
 export function expandBlankRunsForParse(markdown: string): string {
+  // Pass 1: Convert markdown-spacer divs to &nbsp; markers, consuming the
+  // surrounding blank lines that normalizeMarkdownForStorage emits around each
+  // spacer. Without consuming those blanks the blank-run counter in Pass 2
+  // would treat them as additional blank paragraphs and insert extra empties.
   const sourceLines = markdown.split('\n')
   const lines: string[] = []
   let sourceInFence = false
-  for (const line of sourceLines) {
-    if (/^\s*(```|~~~)/.test(line)) {
+
+  for (let si = 0; si < sourceLines.length; si++) {
+    const srcLine = sourceLines[si] ?? ''
+    if (/^\s*(```|~~~)/.test(srcLine)) {
       sourceInFence = !sourceInFence
-      lines.push(line)
+      lines.push(srcLine)
       continue
     }
-    lines.push(!sourceInFence && MARKDOWN_SPACER_RE.test(line) ? '&nbsp;' : line)
+    if (!sourceInFence && MARKDOWN_SPACER_RE.test(srcLine)) {
+      // Drop the blank line we emitted BEFORE the spacer (last entry in
+      // `lines` is that blank, if it exists).
+      const lastLine = lines[lines.length - 1]
+      if (lastLine !== undefined && lastLine.trim() === '') {
+        lines.pop()
+      }
+      lines.push('&nbsp;')
+      // Skip the blank line that normalizeMarkdownForStorage emitted AFTER.
+      const nextLine = sourceLines[si + 1]
+      if (nextLine !== undefined && nextLine.trim() === '') {
+        si += 1
+      }
+      continue
+    }
+    lines.push(srcLine)
   }
+
+  // Pass 2: Expand runs of blank lines into &nbsp; marker paragraphs so that
+  // TipTap's markdown parser reconstructs empty paragraphs correctly.
   let inFence = false
   let lastContentLine: string | null = null
   const out: string[] = []
@@ -144,7 +194,7 @@ export function expandBlankRunsForParse(markdown: string): string {
   }
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+    const line = lines[i] ?? ''
     if (/^\s*(```|~~~)/.test(line)) {
       inFence = !inFence
       lastContentLine = line
@@ -157,16 +207,17 @@ export function expandBlankRunsForParse(markdown: string): string {
     }
     if (line.trim() === '') {
       let runEnd = i
-      while (runEnd < lines.length && lines[runEnd].trim() === '') {
+      while (runEnd < lines.length && (lines[runEnd] ?? '').trim() === '') {
         runEnd += 1
       }
       let nextContentLine: string | null = null
       for (let j = runEnd; j < lines.length; j++) {
-        if (/^\s*(```|~~~)/.test(lines[j])) {
+        const checkLine = lines[j] ?? ''
+        if (/^\s*(```|~~~)/.test(checkLine)) {
           break
         }
-        if (lines[j].trim() !== '') {
-          nextContentLine = lines[j]
+        if (checkLine.trim() !== '') {
+          nextContentLine = checkLine
           break
         }
       }
@@ -246,7 +297,7 @@ export function extractAlignment(markdown: string): { clean: string, directives:
     }
 
     const trailing = line.match(TRAILING_MARKER_RE)
-    if (trailing) {
+    if (trailing && trailing[1]) {
       sawMarker = true
       try {
         const map = JSON.parse(trailing[1]) as Record<string, string>

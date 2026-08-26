@@ -1,6 +1,5 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
-  compatibilityVersion: 4,
   modules: ['@nuxtjs/tailwindcss'],
   nitro: {
     preset: 'cloudflare_pages'

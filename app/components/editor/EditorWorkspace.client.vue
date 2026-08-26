@@ -161,8 +161,10 @@ async function loadDocument(id: string) {
     } finally {
       isApplyingContent.value = false
     }
-    // Canonical markdown: restored content + (possibly empty) alignment marker
-    markdown.value = serializeWithAlignment(editor.value)
+    // Do NOT re-serialize here. TipTap's whitespace normalization can silently
+    // alter the content, causing blank lines to drift on every open/refresh.
+    // markdown.value already holds the canonical pre-load string; onUpdate will
+    // update it the first time the user actually edits the document.
   }
 
   if (docFormat.value === 'markdown') {
@@ -627,7 +629,9 @@ async function onMarkdownFileSelected(event: Event) {
     } finally {
       isApplyingContent.value = false
     }
-    markdown.value = serializeWithAlignment(editor.value)
+    // Do NOT re-serialize after setContent — keep markdown.value equal to the
+    // normalized uploaded content. Re-serializing here would let TipTap mutate
+    // the content before the first user edit, adding phantom blank lines.
   }
 
   if (isAuthenticatedMode.value && currentDocId.value) {
@@ -773,7 +777,8 @@ async function initializePublicMode() {
     } finally {
       isApplyingContent.value = false
     }
-    markdown.value = serializeWithAlignment(editor.value)
+    // Do NOT re-serialize: keep markdown.value equal to the already-normalized
+    // public-draft content to prevent load-time drift.
   }
 
   await refreshPreview()
