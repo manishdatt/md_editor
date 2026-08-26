@@ -24,7 +24,10 @@ steps:
       - '--timeout=60s'
       - '--concurrency=4'
       - '--max-instances=5'
-      - '--no-allow-unauthenticated'
+      # Cloud Run IAM cannot validate the x-api-key sent by the Nuxt worker.
+      # The service is protected by PDF_SERVICE_API_KEY in the Go handler;
+      # IAM auth would reject every request before that handler runs.
+      - '--allow-unauthenticated'
 
 substitutions:
   _REGION: 'europe-west1'

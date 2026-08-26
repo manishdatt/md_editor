@@ -183,9 +183,9 @@ options:
   logging: CLOUD_LOGGING_ONLY
 ```
 
-> `--no-allow-unauthenticated` + our own `x-api-key` gives two independent gates.
-> Alternatively use `--allow-unauthenticated` and rely solely on the API key — decide
-> during setup; keeping both is safer and costs nothing.
+> `--allow-unauthenticated` is required because the Nuxt Cloudflare worker cannot
+> present a Google Cloud Run IAM identity token. The Go service is still protected by
+> the private `x-api-key`, and the Nuxt route separately requires a signed-in user.
 
 ### 3.6 One-time GCP setup (console/gcloud checklist)
 
@@ -457,7 +457,7 @@ Optional nicety (cheap): CodeMirror 6 for the `.typ` pane instead of `<textarea>
 
 | Risk | Mitigation |
 |---|---|
-| Open PDF-compilation endpoint (cost abuse) | Two gates: Cloud Run `--no-allow-unauthenticated` (IAM) **and** shared `x-api-key`; plus Nuxt route requires a signed-in session. |
+| Open PDF-compilation endpoint (cost abuse) | Cloud Run accepts HTTP traffic so the Cloudflare worker can reach it, but the Go handler requires the shared `x-api-key`; plus the Nuxt route requires a signed-in session. |
 | Secret leakage | Key lives in GCP Secret Manager + Cloudflare encrypted env var. Never in repo/client. Browser only ever talks to `/api/export/pdf`. |
 | Malicious/looping `.typ` | Compile timeout (default 20 s) + process kill; 512 KB source cap; Cloud Run `--memory 512Mi --cpu 1 --timeout 60s --max-instances 5` bounds blast radius. |
 | Compiler stderr leakage | Truncate before returning; strip absolute paths if present. |

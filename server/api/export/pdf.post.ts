@@ -49,14 +49,23 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: 'PDF service is not configured' })
   }
 
-  const upstream = await $fetch.raw(`${config.pdfServiceUrl.replace(/\/+$/, '')}/compile`, {
-    method: 'POST',
-    headers: { 'x-api-key': config.pdfServiceKey },
-    body: { source: doc.content },
-    timeout: 45_000,
-    retry: 0,
-    ignoreResponseError: true
-  })
+  let upstream
+  try {
+    upstream = await $fetch.raw(`${config.pdfServiceUrl.replace(/\/+$/, '')}/compile`, {
+      method: 'POST',
+      headers: { 'x-api-key': config.pdfServiceKey },
+      body: { source: doc.content },
+      timeout: 45_000,
+      retry: 0,
+      ignoreResponseError: true
+    })
+  } catch (error) {
+    console.error('[export/pdf] PDF service request failed', error)
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'PDF service unavailable'
+    })
+  }
 
   if (upstream.status !== 200) {
     if (upstream.status === 422) {

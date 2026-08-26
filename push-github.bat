@@ -5,6 +5,12 @@ set "REPO_URL=https://github.com/manishdatt/md_editor.git"
 set "BRANCH=main"
 set "COMMIT_MSG=%*"
 
+if /I "%~1"=="deploy-pdf" (
+  set "BRANCH=deploy-pdf"
+  shift
+  set "COMMIT_MSG=%*"
+)
+
 if "%COMMIT_MSG%"=="" set "COMMIT_MSG=chore: update project"
 
 if not exist ".git" (
