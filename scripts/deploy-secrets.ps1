@@ -34,7 +34,6 @@ if (-not (Test-Path $envPath)) {
 
 # Keys to push as secrets (keep in sync with .env.example)
 $secretKeys = @(
-  "NUXT_AI_PROVIDER",
   "NUXT_GEMINI_API_KEY",
   "NUXT_GEMINI_MODEL",
   "NUXT_NVIDIA_API_KEY",

@@ -66,10 +66,11 @@ export default defineEventHandler(async (event) => {
   let upstream
   try {
     console.info('[export/pdf] calling PDF service', { documentId })
-    upstream = await $fetch.raw(`${config.pdfServiceUrl.replace(/\/+$/, '')}/compile`, {
+    upstream = await $fetch.raw<ArrayBuffer>(`${config.pdfServiceUrl.replace(/\/+$/, '')}/compile`, {
       method: 'POST',
       headers: { 'x-api-key': config.pdfServiceKey },
       body: { source: doc.content },
+      responseType: 'arrayBuffer',
       timeout: 45_000,
       retry: 0,
       ignoreResponseError: true
@@ -111,12 +112,7 @@ export default defineEventHandler(async (event) => {
     'Cache-Control': 'no-store'
   }
 
-  if (upstream.body) {
-    return new Response(upstream.body, { status: 200, headers })
-  }
-
-  const buffer = await upstream.arrayBuffer()
-  return new Response(buffer, { status: 200, headers })
+  return new Response(upstream._data, { status: 200, headers })
 })
 
 function truncateDetail(data: unknown): string {
