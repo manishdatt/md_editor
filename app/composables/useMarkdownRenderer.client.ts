@@ -106,7 +106,7 @@ function renderBlankLineGaps(markdown: string): string {
   let lastContentLine: string | null = null
   const out: string[] = []
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+    const line = lines[i] ?? ''
     if (/^\s*(```|~~~)/.test(line)) {
       inFence = !inFence
       lastContentLine = line
@@ -119,13 +119,14 @@ function renderBlankLineGaps(markdown: string): string {
     }
     if (line.trim() === '') {
       let runEnd = i
-      while (runEnd < lines.length && lines[runEnd].trim() === '') {
+      while (runEnd < lines.length && (lines[runEnd] ?? '').trim() === '') {
         runEnd += 1
       }
       let nextContentLine: string | null = null
       for (let j = runEnd; j < lines.length; j++) {
-        if (lines[j].trim() !== '') {
-          nextContentLine = lines[j]
+        const checkLine = lines[j] ?? ''
+        if (checkLine.trim() !== '') {
+          nextContentLine = checkLine
           break
         }
       }
