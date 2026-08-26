@@ -102,25 +102,15 @@ function createGeminiProvider(apiKey: string, model: string): CompletionProvider
 
       if (!response.ok) {
         const detail = await response.text().catch(() => '')
-        console.error('[ai/complete] Gemini response failed', {
-          status: response.status,
-          model,
-          detail: detail.slice(0, 300)
-        })
         throw createError({
           statusCode: 502,
-          statusMessage: `Gemini provider failed: ${response.status} ${detail.slice(0, 300)}`
+          message: `Gemini provider failed: ${response.status} ${detail.slice(0, 300)}`
         })
       }
 
       const data: any = await response.json()
       const parts: Array<{ text?: string }> = data?.candidates?.[0]?.content?.parts ?? []
       const joined = parts.map((part) => part.text ?? '').join('')
-
-      console.info('[ai/complete] Gemini response succeeded', {
-        model,
-        outputLength: joined.length
-      })
 
       return cleanSuggestion(joined)
     }
@@ -153,24 +143,14 @@ function createNvidiaProvider(apiKey: string, model: string): CompletionProvider
 
       if (!response.ok) {
         const detail = await response.text().catch(() => '')
-        console.error('[ai/complete] NVIDIA response failed', {
-          status: response.status,
-          model,
-          detail: detail.slice(0, 300)
-        })
         throw createError({
           statusCode: 502,
-          statusMessage: `NVIDIA provider failed: ${response.status} ${detail.slice(0, 300)}`
+          message: `NVIDIA provider failed: ${response.status} ${detail.slice(0, 300)}`
         })
       }
 
       const data: any = await response.json()
       const content: string = data?.choices?.[0]?.message?.content ?? ''
-
-      console.info('[ai/complete] NVIDIA response succeeded', {
-        model,
-        outputLength: content.length
-      })
 
       return cleanSuggestion(content)
     }
@@ -197,33 +177,16 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
   const provider = String(config.aiProvider || 'gemini').toLowerCase()
 
-  const requestBody = await readBody(event)
-  const parsedBody = parseBody(requestBody)
-  console.info('[ai/complete] request', {
-    userId: user.id,
-    provider,
-    prefixLength: parsedBody.prefix.length,
-    suffixLength: parsedBody.suffix.length
-  })
+  const parsedBody = parseBody(await readBody(event))
 
   let client: CompletionProvider
   if (provider === 'nvidia') {
-    console.info('[ai/complete] NVIDIA configuration', {
-      hasApiKey: Boolean(config.nvidiaApiKey),
-      model: config.nvidiaModel
-    })
     if (!config.nvidiaApiKey) {
-      console.error('[ai/complete] NVIDIA API key is missing')
       throw createError({ statusCode: 500, statusMessage: 'NVIDIA provider selected but NUXT_NVIDIA_API_KEY is not configured' })
     }
     client = createNvidiaProvider(String(config.nvidiaApiKey), String(config.nvidiaModel))
   } else {
-    console.info('[ai/complete] Gemini configuration', {
-      hasApiKey: Boolean(config.geminiApiKey),
-      model: config.geminiModel
-    })
     if (!config.geminiApiKey) {
-      console.error('[ai/complete] Gemini API key is missing')
       throw createError({ statusCode: 500, statusMessage: 'Gemini provider selected but NUXT_GEMINI_API_KEY is not configured' })
     }
     client = createGeminiProvider(String(config.geminiApiKey), String(config.geminiModel))
@@ -233,10 +196,9 @@ export default defineEventHandler(async (event) => {
     const suggestion = await client.complete(parsedBody.prefix, parsedBody.suffix)
     return { suggestion }
   } catch (error) {
-    console.error('[ai/complete] provider error', {
-      provider,
-      error: error instanceof Error ? error.message : String(error)
-    })
+    if (import.meta.dev) {
+      console.error('[ai/complete] provider error', error)
+    }
     if (error && typeof error === 'object' && 'statusCode' in error) {
       throw error
     }

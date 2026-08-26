@@ -47,7 +47,7 @@ export default defineNuxtConfig({
     geminiApiKey: process.env.NUXT_GEMINI_API_KEY || '',
     geminiModel: process.env.NUXT_GEMINI_MODEL || 'gemini-3.5-flash-lite',
     nvidiaApiKey: process.env.NUXT_NVIDIA_API_KEY || '',
-    nvidiaModel: process.env.NUXT_NVIDIA_MODEL || 'meta/llama-3.1-8b-instruct',
+    nvidiaModel: process.env.NUXT_NVIDIA_MODEL || 'openai/gpt-oss-20b',
     pdfServiceUrl: process.env.NUXT_PDF_SERVICE_URL || '',
     pdfServiceKey: process.env.NUXT_PDF_SERVICE_KEY || '',
     adminEmails: process.env.ADMIN_EMAILS || '',
