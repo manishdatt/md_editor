@@ -588,6 +588,10 @@ function triggerMarkdownUpload() {
 }
 
 function toggleAiGhost() {
+  if (isPublicMode.value) {
+    return
+  }
+
   aiGhostEnabled.value = !aiGhostEnabled.value
   editor.value?.commands.setAiGhostTextEnabled(aiGhostEnabled.value)
 }
@@ -1148,11 +1152,14 @@ watch([isLoaded, isSignedIn, userId], async () => {
 
           <button
             type="button"
-            class="rounded-md border px-2 py-1 text-xs"
+            class="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
             :class="aiGhostEnabled
               ? 'border-neutral-900 bg-neutral-100 text-neutral-900 dark:border-neutral-100 dark:bg-neutral-800 dark:text-neutral-100'
               : 'border-neutral-300 text-neutral-500 dark:border-neutral-700'"
-            :title="aiGhostEnabled ? 'AI autocomplete on (Tab to accept, Esc to dismiss)' : 'AI autocomplete off'"
+            :disabled="isPublicMode"
+            :title="isPublicMode
+              ? 'Sign in to use AI autocomplete'
+              : (aiGhostEnabled ? 'AI autocomplete on (Tab to accept, Esc to dismiss)' : 'AI autocomplete off')"
             @click="toggleAiGhost"
           >
             AI
