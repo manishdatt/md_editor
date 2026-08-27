@@ -948,20 +948,6 @@ watch([isLoaded, isSignedIn, userId], async () => {
           </span>
         </div>
 
-        <div class="flex items-center gap-2">
-          <NuxtLink
-            to="/pricing"
-            class="rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-          >
-            Pricing
-          </NuxtLink>
-          <NuxtLink
-            to="/guide"
-            class="rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-          >
-            Guide
-          </NuxtLink>
-        </div>
       </div>
 
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
