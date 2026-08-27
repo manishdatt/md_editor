@@ -694,7 +694,7 @@ function initializeEditor() {
   // Initial content goes through the same pipeline as loadDocument: strip the
   // alignment marker and expand blank-line runs from older saves into the
   // canonical lossless form before the markdown parser sees them.
-  const { clean: initialClean } = extractAlignment(normalizeMarkdownForStorage(markdown.value))
+  const { clean: initialClean, directives } = extractAlignment(normalizeMarkdownForStorage(markdown.value))
   editor.value = new Editor({
     contentType: 'markdown',
     content: expandBlankRunsForParse(initialClean),
@@ -756,6 +756,15 @@ function initializeEditor() {
       void refreshPreview()
     }
   })
+
+  if (directives.length > 0) {
+    isApplyingContent.value = true
+    try {
+      applyAlignmentDirectives(editor.value, directives)
+    } finally {
+      isApplyingContent.value = false
+    }
+  }
 }
 
 async function initializePublicMode() {
