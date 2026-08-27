@@ -5,9 +5,9 @@ import CodeBlockNodeView from '~/components/editor/CodeBlockNodeView.vue'
 export const CodeBlockShiki = CodeBlock.extend({
   addOptions() {
     return {
-      ...this.parent?.(),
+      ...(this.parent?.() || {}),
       defaultLanguage: 'javascript'
-    }
+    } as any
   },
 
   addAttributes() {
