@@ -286,6 +286,7 @@ export function extractAlignment(markdown: string): { clean: string, directives:
         claimBlock(line)
       } else {
         fence = false
+        inBlock = false
         cleaned.push(line)
       }
       continue
@@ -323,14 +324,17 @@ export function extractAlignment(markdown: string): { clean: string, directives:
     if (line.trim() === '') {
       if (inBlock) {
         inBlock = false
-        cleaned.push('')
-      } else {
-        cleaned.push('')
       }
+      cleaned.push('')
       continue
     }
 
-    claimBlock(line)
+    if (inBlock) {
+      // Continuation line within the same block (e.g. multi-line paragraph or element)
+      cleaned.push(line)
+    } else {
+      claimBlock(line)
+    }
   }
 
   // Removing the trailing marker line leaves the separator blank(s) that
