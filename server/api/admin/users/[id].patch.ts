@@ -4,7 +4,7 @@ import { user } from '~~/server/db/schema'
 import { requireAdmin, type UserTier } from '~~/server/utils/auth'
 import { useDatabase } from '~~/server/utils/database'
 
-const VALID_TIERS: UserTier[] = ['free', 'paid']
+const VALID_TIERS: UserTier[] = ['free', 'starter', 'pro']
 
 export default defineEventHandler(async (event) => {
   const admin = await requireAdmin(event)

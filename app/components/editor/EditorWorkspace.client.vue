@@ -28,7 +28,7 @@ type DocItem = {
   updated_at: number
 }
 
-type UserTier = 'free' | 'paid'
+type UserTier = 'free' | 'starter' | 'pro'
 type AppMode = 'public' | UserTier
 
 const TYPST_STARTER = '= Untitled Document\n\nStart writing your Typst document here.\n'
@@ -101,7 +101,13 @@ const canCreateDocument = computed(() => {
   if (isPublicMode.value) {
     return true
   }
-  return !(userTier.value === 'free' && docs.value.length >= 3)
+  if (userTier.value === 'free') {
+    return docs.value.length < 3
+  }
+  if (userTier.value === 'starter') {
+    return docs.value.length < 15
+  }
+  return true
 })
 
 // Only saved, authenticated markdown documents can be shared (anonymous
@@ -698,7 +704,6 @@ function initializeEditor() {
   editor.value = new Editor({
     contentType: 'markdown',
     content: expandBlankRunsForParse(initialClean),
-    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         codeBlock: false,
@@ -745,7 +750,7 @@ function initializeEditor() {
       if (isApplyingContent.value) {
         return
       }
-      markdown.value = serializeWithAlignment(current)
+      markdown.value = serializeWithAlignment(current as any)
       if (isAuthenticatedMode.value) {
         scheduleSave(markdown.value)
       } else {
@@ -757,10 +762,10 @@ function initializeEditor() {
     }
   })
 
-  if (directives.length > 0) {
+  if (directives.length > 0 && editor.value) {
     isApplyingContent.value = true
     try {
-      applyAlignmentDirectives(editor.value, directives)
+      applyAlignmentDirectives(editor.value as any, directives)
     } finally {
       isApplyingContent.value = false
     }
@@ -813,7 +818,10 @@ async function initializeAuthenticatedMode() {
     return
   }
 
-  await loadDocument(docs.value[0].id)
+  const firstDoc = docs.value[0]
+  if (firstDoc) {
+    await loadDocument(firstDoc.id)
+  }
 }
 
 async function syncModeState() {
@@ -907,7 +915,8 @@ watch([isLoaded, isSignedIn, userId], async () => {
           >
             <template v-if="mode === 'public'">Public</template>
             <template v-else-if="mode === 'free'">Free</template>
-            <template v-else>Paid</template>
+            <template v-else-if="mode === 'starter'">Starter</template>
+            <template v-else>Pro</template>
           </span>
           <span
             v-if="isPublicMode"

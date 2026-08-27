@@ -5,7 +5,7 @@ import { getAuth } from '~~/server/auth'
 import { user } from '~~/server/db/schema'
 import { useDatabase } from '~~/server/utils/database'
 
-export type UserTier = 'free' | 'paid'
+export type UserTier = 'free' | 'starter' | 'pro'
 
 export type AuthenticatedUser = {
   id: string

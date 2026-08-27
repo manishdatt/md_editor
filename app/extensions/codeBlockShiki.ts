@@ -56,6 +56,6 @@ export const CodeBlockShiki = CodeBlock.extend({
   },
 
   addNodeView() {
-    return VueNodeViewRenderer(CodeBlockNodeView)
+    return VueNodeViewRenderer(CodeBlockNodeView as any)
   }
 })

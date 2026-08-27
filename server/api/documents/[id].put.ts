@@ -5,7 +5,8 @@ import { useDatabase } from '~~/server/utils/database'
 
 const TIER_STORAGE_BYTES: Record<UserTier, number> = {
   free: 2 * 1024 * 1024,
-  paid: 50 * 1024 * 1024
+  starter: 10 * 1024 * 1024,
+  pro: 50 * 1024 * 1024
 }
 
 type DocumentFormat = 'markdown' | 'typst'

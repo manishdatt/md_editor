@@ -35,7 +35,7 @@ export const SvgBlock = Node.create({
   },
 
   addNodeView() {
-    return VueNodeViewRenderer(SvgNodeView)
+    return VueNodeViewRenderer(SvgNodeView as any)
   },
 
   markdownTokenName: 'code',

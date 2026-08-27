@@ -45,7 +45,7 @@ export const HtmlBlock = Node.create({
   },
 
   addNodeView() {
-    return VueNodeViewRenderer(HtmlBlockView)
+    return VueNodeViewRenderer(HtmlBlockView as any)
   },
 
   markdownTokenName: 'code',

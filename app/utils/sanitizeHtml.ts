@@ -34,5 +34,5 @@ function ensure() {
 
 export function sanitizeHtml(html: string): string {
   ensure()
-  return DOMPurify.sanitize(html, HTML_SANITIZE_CONFIG) as string
+  return String((DOMPurify.sanitize(html, HTML_SANITIZE_CONFIG) as unknown) || '')
 }

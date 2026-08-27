@@ -72,8 +72,10 @@ export const MarkdownTableBlock = Node.create({
 
           for (let i = emptyNodes.length - 1; i >= 0; i -= 1) {
             const range = emptyNodes[i]
-            tr = tr.delete(range.from, range.to)
-            changed = true
+            if (range) {
+              tr = tr.delete(range.from, range.to)
+              changed = true
+            }
           }
 
           return changed ? tr : null

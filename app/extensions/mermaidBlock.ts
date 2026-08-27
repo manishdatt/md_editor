@@ -33,7 +33,7 @@ export const MermaidBlock = Node.create({
   },
 
   addNodeView() {
-    return VueNodeViewRenderer(MermaidNodeView)
+    return VueNodeViewRenderer(MermaidNodeView as any)
   },
 
   markdownTokenName: 'code',

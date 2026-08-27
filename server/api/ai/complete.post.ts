@@ -58,7 +58,7 @@ function cleanSuggestion(raw: string): string {
 
   let text = raw
   const fence = text.match(/^```[a-zA-Z0-9_-]*\r?\n([\s\S]*?)\r?\n```$/)
-  if (fence) {
+  if (fence && fence[1] !== undefined) {
     text = fence[1]
   } else {
     text = text.replace(/^```[a-zA-Z0-9_-]*\r?\n?/, '').replace(/```$/m, '')
