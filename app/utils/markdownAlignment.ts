@@ -169,6 +169,15 @@ export function expandBlankRunsForParse(markdown: string): string {
   const out: string[] = []
 
   const emitRun = (runLength: number, nextContentLine: string | null) => {
+    // A fenced block is already terminated by its closing fence. Keeping the
+    // single separator after it is useful in source Markdown, but feeding it
+    // to TipTap can materialize an extra empty paragraph after raw HTML/code.
+    // Do not expand that separator in the editor parse input.
+    const followsClosedFence = Boolean(lastContentLine && /^\s*(```|~~~)/.test(lastContentLine))
+    if (runLength === 1 && followsClosedFence) {
+      return
+    }
+
     const insideList = Boolean(
       lastContentLine
       && nextContentLine
@@ -358,12 +367,29 @@ export function applyAlignmentDirectives(editor: Editor, directives: AlignmentDi
   if (!editor || directives.length === 0) {
     return
   }
+
+  // Markdown parsing can materialize a blank separator as an empty paragraph
+  // (notably after fenced raw-HTML blocks). Those paragraphs are not source
+  // blocks and therefore are not represented in the trailing alignment map.
+  // Ignore them when translating the persisted source index to a ProseMirror
+  // child position; otherwise {"1":"center"} can be applied to the block
+  // immediately before the intended heading.
+  const sourceChildren: Array<{ node: PMNode, childIndex: number }> = []
+  editor.state.doc.forEach((node: PMNode, _offset: number, childIndex: number) => {
+    const isEmptyParagraph = node.type.name === 'paragraph' && node.content.size === 0
+    if (!isEmptyParagraph) {
+      sourceChildren.push({ node, childIndex })
+    }
+  })
+
   for (const { index, align } of directives) {
-    if (index < 0 || index >= editor.state.doc.childCount) {
+    const target = sourceChildren[index]
+    if (!target) {
       continue
     }
+
     let pos = 0
-    for (let j = 0; j < index; j++) {
+    for (let j = 0; j < target.childIndex; j++) {
       const child = editor.state.doc.child(j)
       if (!child) {
         break
