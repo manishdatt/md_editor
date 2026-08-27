@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   const [userAgg] = await db
     .select({
       total: sql<number>`count(*)`,
-      paid: sql<number>`sum(case when ${user.tier} = 'paid' then 1 else 0 end)`,
+      paid: sql<number>`sum(case when ${user.tier} <> 'free' then 1 else 0 end)`,
       disabled: sql<number>`coalesce(sum(case when ${user.disabledAt} is not null then 1 else 0 end), 0)`
     })
     .from(user)

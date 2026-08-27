@@ -1,11 +1,11 @@
 <script setup lang="ts">
 useSeoMeta({
   title: 'Guide',
-  description: 'User guide for the Markdown editor, including Markdown syntax basics and editor workflow.',
+  description: 'User guide for the Markdown and Typst editor, including syntax basics and editor workflow.',
   ogTitle: 'shbd Guide',
-  ogDescription: 'User guide for the Markdown editor, including Markdown syntax basics and editor workflow.',
+  ogDescription: 'User guide for the Markdown and Typst editor, including syntax basics and editor workflow.',
   twitterTitle: 'shbd Guide',
-  twitterDescription: 'User guide for the Markdown editor, including Markdown syntax basics and editor workflow.'
+  twitterDescription: 'User guide for the Markdown and Typst editor, including syntax basics and editor workflow.'
 })
 </script>
 
@@ -23,24 +23,38 @@ useSeoMeta({
 
       <h1>User Guide</h1>
       <p>
-        This editor is a Markdown-first workspace. You write Markdown on the left and see rendered output on the right.
-        The saved source of truth is Markdown text.
+        This editor supports both Markdown and Typst. Use the format toggle at the top of the workspace to switch
+        between the two editing experiences.
       </p>
 
       <h2>Core Workflow</h2>
       <ul>
+        <li>Use the <strong>Markdown</strong> or <strong>Typst</strong> toggle to choose the editor experience.</li>
         <li>Use <strong>New</strong> to create a Markdown document, or <strong>New Typst</strong> to create a Typst document.</li>
         <li>Write content in the editor pane.</li>
-        <li>Use <strong>PDF</strong> to export your rendered document.</li>
+        <li>In Markdown mode, use the live preview and formatting toolbar. In Typst mode, write Typst source directly.</li>
+        <li>Use <strong>PDF</strong> to export your document. Typst files are compiled on the server.</li>
         <li>Use <strong>Upload .md</strong> and <strong>Download .md</strong> for Markdown files (<strong>Download .typ</strong> for Typst documents).</li>
       </ul>
+
+      <h2>Markdown and Typst Modes</h2>
+      <p>
+        Markdown mode provides the rich editor, formatting toolbar, live preview, code blocks, tables, Mermaid,
+        SVG, HTML blocks, and AI autocomplete. Typst mode shows a plain source editor and uses Typst’s typesetting
+        syntax for PDF output. Switching the toggle changes the editor view while preserving your source.
+      </p>
+      <p>
+        Signed-in documents remember the selected format and save changes automatically. Typst PDF export requires
+        signing in; Markdown PDF export is available from the rendered preview.
+      </p>
 
       <h2>Typst Documents</h2>
       <p>
         Typst documents are written directly in the
         <a href="https://typst.app/docs" target="_blank" rel="noopener">Typst markup language</a>
         and compiled to print-quality PDF when you press <strong>PDF</strong>.
-        The format is chosen when the document is created and cannot be changed later.
+        Use the format toggle to switch between Markdown and Typst views when needed. Keep Typst source in Typst mode
+        so it is not interpreted as Markdown.
       </p>
       <pre><code>= Hello Typst
 
@@ -130,10 +144,17 @@ graph TD
 
       <h2>Modes</h2>
       <ul>
-        <li><strong>Public:</strong> editable but not saved.</li>
+        <li><strong>Public:</strong> editable in the browser; sign in to save changes.</li>
         <li><strong>Free:</strong> saved to your account with a document limit.</li>
         <li><strong>Paid:</strong> saved to your account with no document limit.</li>
       </ul>
+
+      <h2>Sharing</h2>
+      <p>
+        Signed-in Markdown documents can be shared with a public link. You can use a generated link or choose a custom
+        slug such as <code>/p/custom-name</code>. Custom share link slugs are available on all plans. Typst documents
+        cannot currently be shared through the public document viewer.
+      </p>
     </article>
   </section>
 </template>

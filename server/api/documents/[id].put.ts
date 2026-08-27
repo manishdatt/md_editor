@@ -31,8 +31,6 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<PutBody>(event)
   const title = typeof body?.title === 'string' ? body.title : 'Untitled Document'
   const content = typeof body?.content === 'string' ? body.content : ''
-  // Format is fixed at creation; it is intentionally ignored on updates so a
-  // document can never silently switch between markdown and typst.
   const format = normalizeFormat(body?.format)
   const updatedAt = Date.now()
 
@@ -72,7 +70,7 @@ export default defineEventHandler(async (event) => {
   if (existingDoc) {
     await db
       .update(documents)
-      .set({ title, content, updatedAt })
+      .set({ title, content, format, updatedAt })
       .where(and(eq(documents.id, id), eq(documents.ownerId, user.id)))
   } else {
     await db

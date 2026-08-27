@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { authClient } from '~/lib/auth-client'
 
-type Tier = 'free' | 'paid'
+type Tier = 'free' | 'starter' | 'pro'
 
 type AdminStats = {
   users: { total: number, paid: number, disabled: number }
@@ -111,8 +111,12 @@ async function onTierChange(row: AdminUserRow, event: Event) {
       body: { tier: nextTier }
     })
     if (stats.value) {
-      const delta = nextTier === 'paid' ? 1 : -1
-      stats.value.users.paid = Math.max(0, stats.value.users.paid + delta)
+      const wasPaid = previous !== 'free'
+      const isPaid = nextTier !== 'free'
+      if (wasPaid !== isPaid) {
+        const delta = isPaid ? 1 : -1
+        stats.value.users.paid = Math.max(0, stats.value.users.paid + delta)
+      }
     }
   } catch (err) {
     row.tier = previous
@@ -336,7 +340,8 @@ onMounted(() => {
                       @change="onTierChange(row, $event)"
                     >
                       <option value="free">free</option>
-                      <option value="paid">paid</option>
+                      <option value="starter">starter</option>
+                      <option value="pro">pro</option>
                     </select>
                   </td>
                   <td class="px-4 py-2.5 tabular-nums">{{ row.documentCount }}</td>

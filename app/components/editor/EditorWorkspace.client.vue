@@ -191,12 +191,34 @@ async function saveDocument(content: string) {
     method: 'PUT',
     body: {
       title: title.value,
-      content
+      content,
+      format: docFormat.value
     }
   })
 
   saveState.value = 'saved'
   await listDocuments()
+}
+
+async function setDocumentFormat(format: DocumentFormat) {
+  if (docFormat.value === format) {
+    return
+  }
+
+  docFormat.value = format
+  typstError.value = ''
+
+  // Keep the current source intact while changing the editor surface. This
+  // lets users move between the two views without losing work; the selected
+  // format is saved with authenticated documents along with the source.
+  if (isAuthenticatedMode.value && currentDocId.value) {
+    scheduleSave(markdown.value)
+  }
+
+  if (format === 'markdown') {
+    await nextTick()
+    await refreshPreview()
+  }
 }
 
 function scheduleSave(content: string) {
@@ -911,10 +933,10 @@ watch([isLoaded, isSignedIn, userId], async () => {
       <div class="flex items-start justify-between gap-2">
         <div class="flex flex-wrap items-center gap-2">
           <span
+            v-if="!isPublicMode"
             class="rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs font-medium dark:border-neutral-700 dark:bg-neutral-950"
           >
-            <template v-if="mode === 'public'">Public</template>
-            <template v-else-if="mode === 'free'">Free</template>
+            <template v-if="mode === 'free'">Free</template>
             <template v-else-if="mode === 'starter'">Starter</template>
             <template v-else>Pro</template>
           </span>
@@ -922,19 +944,58 @@ watch([isLoaded, isSignedIn, userId], async () => {
             v-if="isPublicMode"
             class="text-xs text-amber-700 dark:text-amber-300"
           >
-            Changes will not be saved
+            Sign in to save changes
           </span>
         </div>
 
-        <NuxtLink
-          to="/guide"
-          class="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700"
-        >
-          Guide
-        </NuxtLink>
+        <div class="flex items-center gap-2">
+          <NuxtLink
+            to="/pricing"
+            class="rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+          >
+            Pricing
+          </NuxtLink>
+          <NuxtLink
+            to="/guide"
+            class="rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+          >
+            Guide
+          </NuxtLink>
+        </div>
       </div>
 
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div
+          class="inline-flex w-fit rounded-md border border-neutral-300 bg-neutral-50 p-0.5 dark:border-neutral-700 dark:bg-neutral-950"
+          role="radiogroup"
+          aria-label="Editor format"
+        >
+          <button
+            type="button"
+            role="radio"
+            :aria-checked="docFormat === 'markdown'"
+            class="rounded px-3 py-1 text-sm transition-colors"
+            :class="docFormat === 'markdown'
+              ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
+              : 'text-neutral-600 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800'"
+            @click="setDocumentFormat('markdown')"
+          >
+            Markdown
+          </button>
+          <button
+            type="button"
+            role="radio"
+            :aria-checked="docFormat === 'typst'"
+            class="rounded px-3 py-1 text-sm transition-colors"
+            :class="docFormat === 'typst'
+              ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
+              : 'text-neutral-600 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800'"
+            @click="setDocumentFormat('typst')"
+          >
+            Typst
+          </button>
+        </div>
+
         <select
           v-if="isAuthenticatedMode"
           v-model="currentDocId"
