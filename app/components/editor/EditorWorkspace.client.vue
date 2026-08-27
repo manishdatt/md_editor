@@ -55,6 +55,7 @@ const typstError = ref('')
 
 const saveTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const pendingMarkdown = ref<string | null>(null)
+const showPreview = ref(true)
 // True while programmatically applying document content (load/upload/mode
 // switch). Guards the save path so a mere refresh can never re-serialize and
 // persist content — the corruption loop that degraded documents over reloads.
@@ -599,6 +600,13 @@ function toggleAiGhost() {
   editor.value?.commands.setAiGhostTextEnabled(aiGhostEnabled.value)
 }
 
+function togglePreview() {
+  showPreview.value = !showPreview.value
+  if (import.meta.client) {
+    window.localStorage.setItem('show-preview-pane', showPreview.value ? '1' : '0')
+  }
+}
+
 async function onMarkdownFileSelected(event: Event) {
   const input = event.target as HTMLInputElement | null
   const file = input?.files?.[0]
@@ -832,6 +840,10 @@ onMounted(async () => {
   initializeEditor()
   if (import.meta.client) {
     aiGhostEnabled.value = window.localStorage.getItem('ai-ghost-enabled') !== '0'
+    const savedPreview = window.localStorage.getItem('show-preview-pane')
+    if (savedPreview !== null) {
+      showPreview.value = savedPreview !== '0'
+    }
   }
   onThemeChanged = () => {
     void refreshPreview()
@@ -980,6 +992,19 @@ watch([isLoaded, isSignedIn, userId], async () => {
           {{ docFormat === 'typst' ? 'Download .typ' : 'Download .md' }}
         </button>
 
+        <button
+          v-if="docFormat === 'markdown'"
+          type="button"
+          class="rounded-md border px-3 py-1 text-sm transition-colors"
+          :class="showPreview
+            ? 'border-neutral-900 bg-neutral-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900'
+            : 'border-neutral-300 text-neutral-600 dark:border-neutral-700 dark:text-neutral-400'"
+          :title="showPreview ? 'Hide side-by-side preview pane' : 'Show side-by-side preview pane'"
+          @click="togglePreview"
+        >
+          {{ showPreview ? 'Preview: On' : 'Preview: Off' }}
+        </button>
+
         <input
           ref="uploadInputRef"
           type="file"
@@ -1105,7 +1130,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
 
     <div
       class="grid min-h-0 flex-1 grid-cols-1 gap-3"
-      :class="docFormat === 'typst' ? '' : 'lg:grid-cols-2'"
+      :class="docFormat === 'markdown' && showPreview ? 'lg:grid-cols-2' : ''"
     >
       <section class="min-h-0 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
         <div
@@ -1209,7 +1234,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
             title="Inline code"
             @click="editor.chain().focus().toggleCode().run()"
           >
-            &lt;/&gt;
+            `code`
           </button>
 
           <span class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
@@ -1251,7 +1276,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
             title="Bullet list"
             @click="editor.chain().focus().toggleBulletList().run()"
           >
-            • List
+            List
           </button>
           <button
             type="button"
@@ -1260,7 +1285,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
             title="Numbered list"
             @click="editor.chain().focus().toggleOrderedList().run()"
           >
-            1. List
+            Numbered
           </button>
           <button
             type="button"
@@ -1269,7 +1294,15 @@ watch([isLoaded, isSignedIn, userId], async () => {
             title="Blockquote"
             @click="editor.chain().focus().toggleBlockquote().run()"
           >
-            ❝ Quote
+            Quote
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 py-1 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            title="Horizontal rule"
+            @click="editor.chain().focus().setHorizontalRule().run()"
+          >
+            HR
           </button>
 
           <span class="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-700" />
@@ -1281,7 +1314,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
             title="Add or edit link"
             @click="setLink()"
           >
-            🔗 Link
+            Link
           </button>
           <button
             type="button"
@@ -1343,7 +1376,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
       </section>
 
       <section
-        v-if="docFormat === 'markdown'"
+        v-if="docFormat === 'markdown' && showPreview"
         class="min-h-0 rounded-lg border border-neutral-300 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900"
       >
         <div
