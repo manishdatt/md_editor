@@ -4,7 +4,7 @@ import HtmlBlockView from '~/components/editor/HtmlBlockView.vue'
 
 function isRawHtmlFence(language: string): boolean {
   const lang = String(language || '').trim().toLowerCase()
-  const normalized = lang.replace(/^\{/, '').replace(/\}$/, '')
+  const normalized = lang.replace(/^\{/, '').replace(/\}$/, '').trim()
   return normalized === '=html' || normalized === 'html' || normalized === 'rawhtml' || normalized === 'htmlraw'
 }
 

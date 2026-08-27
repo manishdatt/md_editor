@@ -704,12 +704,11 @@ function initializeEditor() {
           breaks: false
         }
       }),
-      RawHtmlText,
-      SvgBlock,
       HtmlBlock,
+      SvgBlock,
+      MermaidBlock,
       CodeBlockShiki,
       MarkdownTableBlock,
-      MermaidBlock,
       AiGhostText,
       TextAlign.configure({
         types: ['heading', 'paragraph'],
