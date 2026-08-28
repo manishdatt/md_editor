@@ -111,4 +111,12 @@ describe('markdown alignment and spacing boundaries', () => {
     expect(expandBlankRunsForParse(svg)).toBe('```svg\n<svg />\n```\n## Heading')
     expect(expandBlankRunsForParse(html)).toBe('```{=html}\n<div />\n```\n## Heading')
   })
+
+  it('never exposes editor-only nbsp markers in parse input or stored Markdown', () => {
+    const source = '## Test\n\n\nhi\n&nbsp;\n&nbsp;'
+
+    expect(expandBlankRunsForParse(source)).not.toContain('&nbsp;')
+    expect(normalizeMarkdownForStorage(source)).not.toContain('&nbsp;')
+    expect(normalizeMarkdownForStorage(source)).toBe('## Test\n\n\nhi')
+  })
 })

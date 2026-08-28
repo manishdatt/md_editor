@@ -23,8 +23,6 @@ const LEGACY_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 // for extra authored gaps. TipTap's `&nbsp;` empty-paragraph form is used only
 // when feeding content into the parser and is never persisted.
 
-const LIST_ITEM_LINE_RE = /^\s*([-*+]|\d{1,9}[.)])\s/
-
 const EMPTY_PARAGRAPH_MARKER_RE = /^\s*(?:&nbsp;|\u00a0)\s*$/i
 const MARKDOWN_SPACER_RE = /^\s*<div\s+class=["']markdown-spacer["'](?:\s+[^>]*)?>\s*<\/div>\s*$/i
 const MARKDOWN_SPACER = '<div class="markdown-spacer"></div>'
@@ -135,10 +133,12 @@ export function normalizeMarkdownForStorage(markdown: string): string {
 
     spacerSeparatorPending = false
 
-    // Both the legacy &nbsp; form (from old TipTap saves) and the canonical
-    // markdown-spacer form are converted to a properly-padded spacer div.
+    // Legacy TipTap empty-paragraph markers represent blank lines, not literal
+    // content. Convert them back to ordinary Markdown whitespace at the
+    // persistence boundary so they cannot leak into saved/downloaded files.
     if (EMPTY_PARAGRAPH_MARKER_RE.test(line)) {
-      emitSpacer()
+      flush()
+      out.push('')
       continue
     }
 
@@ -162,125 +162,52 @@ export function normalizeMarkdownForStorage(markdown: string): string {
   return out.join('\n')
 }
 
-// Stored documents encode B consecutive blank lines as B-1 intentional empty
-// paragraphs (older blank-line-encoded saves and hand-authored files). The
-// markdown loader rebuilds empty paragraphs by COUNTING `\n\n` separators in
-// whitespace runs (parseImplicitEmptyParagraphs), which is lossy for plain
-// blank-line runs. Call this BEFORE setContent: it re-expands each run into
-// the library's internal lossless form (explicit `&nbsp;` marker paragraphs),
-// so the parser rebuilds exactly B-1 empty paragraphs.
-// IDEMPOTENT on canonical storage (single blank separators are untouched),
-// so it is always safe to call. Fences are skipped and loose-list separators
-// (blank line between two list items) are left alone.
+// Prepare stored Markdown for TipTap without introducing visible entity text.
+// Older versions used `&nbsp;` marker paragraphs here to preserve repeated
+// blank-line runs. Those markers are valid HTML, but TipTap can expose them as
+// literal editor text and they can then leak into preview/download output.
+// Storage already preserves the source blank-line run, so the parser should
+// receive that source directly. Explicit markdown spacers are also reduced to
+// their surrounding structural separator for the editor surface.
 export function expandBlankRunsForParse(markdown: string): string {
-  // Pass 1: Convert markdown-spacer divs to &nbsp; markers, consuming the
-  // surrounding blank lines that normalizeMarkdownForStorage emits around each
-  // spacer. Without consuming those blanks the blank-run counter in Pass 2
-  // would treat them as additional blank paragraphs and insert extra empties.
   const sourceLines = markdown.split('\n')
-  const lines: string[] = []
-  let sourceInFence = false
-
-  for (let si = 0; si < sourceLines.length; si++) {
-    const srcLine = sourceLines[si] ?? ''
-    if (/^\s*(```|~~~)/.test(srcLine)) {
-      sourceInFence = !sourceInFence
-      lines.push(srcLine)
-      continue
-    }
-    if (!sourceInFence && MARKDOWN_SPACER_RE.test(srcLine)) {
-      // Drop the blank line we emitted BEFORE the spacer (last entry in
-      // `lines` is that blank, if it exists).
-      const lastLine = lines[lines.length - 1]
-      if (lastLine !== undefined && lastLine.trim() === '') {
-        lines.pop()
-      }
-      lines.push('&nbsp;')
-      // Skip the blank line that normalizeMarkdownForStorage emitted AFTER.
-      const nextLine = sourceLines[si + 1]
-      if (nextLine !== undefined && nextLine.trim() === '') {
-        si += 1
-      }
-      continue
-    }
-    lines.push(srcLine)
-  }
-
-  // Pass 2: Expand runs of blank lines into &nbsp; marker paragraphs so that
-  // TipTap's markdown parser reconstructs empty paragraphs correctly.
-  let inFence = false
-  let lastContentLine: string | null = null
   const out: string[] = []
+  let inFence = false
 
-  const emitRun = (runLength: number, nextContentLine: string | null) => {
-    // A fenced block is already terminated by its closing fence. Keeping the
-    // single separator after it is useful in source Markdown, but feeding it
-    // to TipTap can materialize an extra empty paragraph after raw HTML/code.
-    // Do not expand that separator in the editor parse input.
-    const followsClosedFence = Boolean(lastContentLine && /^\s*(```|~~~)/.test(lastContentLine))
-    if (runLength === 1 && followsClosedFence) {
-      return
-    }
-
-    const insideList = Boolean(
-      lastContentLine
-      && nextContentLine
-      && LIST_ITEM_LINE_RE.test(lastContentLine)
-      && LIST_ITEM_LINE_RE.test(nextContentLine)
-    )
-    if (insideList) {
-      for (let i = 0; i < runLength; i++) {
-        out.push('')
-      }
-      return
-    }
-    const empties = Math.max(runLength - 1, 0)
-    // One retained blank line separates the previous block from the first
-    // marker (markdown needs it), then each `&nbsp;` marker is followed by its
-    // own blank line — reproducing the serializer's canonical layout exactly:
-    // "para1\n\n&nbsp;\n\n&nbsp;\n\npara2".
-    out.push('')
-    for (let e = 0; e < empties; e++) {
-      out.push('&nbsp;')
-      out.push('')
-    }
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? ''
+  for (let i = 0; i < sourceLines.length; i += 1) {
+    const line = sourceLines[i] ?? ''
     if (/^\s*(```|~~~)/.test(line)) {
       inFence = !inFence
-      lastContentLine = line
       out.push(line)
       continue
     }
-    if (inFence) {
-      out.push(line)
+    if (!inFence && MARKDOWN_SPACER_RE.test(line)) {
+      // Keep a single structural separator, but never inject an entity line.
+      if (out.length > 0 && out[out.length - 1] === '') {
+        out.pop()
+      }
+      if (out.length > 0) {
+        out.push('')
+      }
+      if ((sourceLines[i + 1] ?? '').trim() === '') {
+        i += 1
+      }
       continue
     }
-    if (line.trim() === '') {
-      let runEnd = i
-      while (runEnd < lines.length && (lines[runEnd] ?? '').trim() === '') {
-        runEnd += 1
-      }
-      let nextContentLine: string | null = null
-      for (let j = runEnd; j < lines.length; j++) {
-        const checkLine = lines[j] ?? ''
-        if (/^\s*(```|~~~)/.test(checkLine)) {
-          break
-        }
-        if (checkLine.trim() !== '') {
-          nextContentLine = checkLine
-          break
-        }
-      }
-      emitRun(runEnd - i, nextContentLine)
-      i = runEnd - 1
+    if (!inFence && EMPTY_PARAGRAPH_MARKER_RE.test(line)) {
+      // Legacy editor-only marker: preserve its blank-line meaning without
+      // passing the visible entity through to the editor.
+      out.push('')
       continue
     }
-    lastContentLine = line
+    if (!inFence && line.trim() === '' && /^\s*(```|~~~)/.test(sourceLines[i - 1] ?? '')) {
+      // A single separator after a raw fence is structural, not an editor
+      // paragraph. Keeping it out of parse input avoids a phantom paragraph.
+      continue
+    }
     out.push(line)
   }
+
   return out.join('\n')
 }
 
