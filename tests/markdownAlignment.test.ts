@@ -84,7 +84,6 @@ describe('markdown alignment and spacing boundaries', () => {
     const source = [
       '## Test',
       '',
-      '',
       'hi',
       '',
       '<div class="markdown-spacer"></div>',
@@ -95,13 +94,17 @@ describe('markdown alignment and spacing boundaries', () => {
     expect(normalizeMarkdownForStorage(source)).toBe([
       '## Test',
       '',
-      '',
       'hi',
       '',
       '<div class="markdown-spacer"></div>',
       '',
       '<!-- alignment: {"0":"center"} -->'
     ].join('\n'))
+  })
+
+  it('collapses accidental ordinary blank-line runs to one canonical separator', () => {
+    const source = '## Test\n\n\nhi\n\n\nAfter'
+    expect(normalizeMarkdownForStorage(source)).toBe('## Test\n\nhi\n\nAfter')
   })
 
   it('does not expand the structural separator after a closed SVG or HTML fence', () => {

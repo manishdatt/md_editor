@@ -82,9 +82,11 @@ export function normalizeMarkdownForStorage(markdown: string): string {
     if (blankCount === 0) {
       return
     }
-    for (let i = 0; i < blankCount; i += 1) {
-      out.push('')
-    }
+    // Canonical storage uses exactly one blank separator between ordinary
+    // Markdown blocks. Additional authored vertical space must be represented
+    // by an explicit markdownSpacer node, not by an unstable run of empty
+    // paragraphs that TipTap may serialize differently on reload.
+    out.push('')
     blankCount = 0
   }
 
