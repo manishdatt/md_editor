@@ -41,16 +41,16 @@ onMounted(() => {
           <span class="text-2xl font-semibold tracking-tight" style="font-family: 'Laila', ui-sans-serif, system-ui, sans-serif">शब्द</span>
         </NuxtLink>
 
-        <div class="flex items-center gap-2">
+        <nav class="flex items-center gap-3" aria-label="Main navigation">
           <NuxtLink
             to="/pricing"
-            class="rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+            class="text-xs text-neutral-600 transition-colors hover:text-neutral-950 hover:underline dark:text-neutral-300 dark:hover:text-white"
           >
             Pricing
           </NuxtLink>
           <NuxtLink
             to="/guide"
-            class="rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+            class="text-xs text-neutral-600 transition-colors hover:text-neutral-950 hover:underline dark:text-neutral-300 dark:hover:text-white"
           >
             Guide
           </NuxtLink>
@@ -86,7 +86,7 @@ onMounted(() => {
           </button>
 
           <AuthButtons />
-        </div>
+        </nav>
       </div>
     </header>
 

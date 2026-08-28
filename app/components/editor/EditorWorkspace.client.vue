@@ -13,6 +13,7 @@ import { HtmlBlock } from '~/extensions/htmlBlock'
 import { RawHtmlText } from '~/extensions/rawHtmlText'
 import { AiGhostText } from '~/extensions/aiGhostText'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
+import { getPastedMarkdownTable } from '~/utils/markdownTablePaste'
 import { serializeWithAlignment, extractAlignment, applyAlignmentDirectives, expandBlankRunsForParse, normalizeMarkdownForStorage } from '~/utils/markdownAlignment'
 import { authClient } from '~/lib/auth-client'
 
@@ -865,6 +866,15 @@ function initializeEditor() {
 
         event.preventDefault()
         const { from, to } = view.state.selection
+        const table = getPastedMarkdownTable(text)
+        if (table) {
+          const tableType = view.state.schema.nodes.markdownTable
+          if (tableType) {
+            const tableNode = tableType.create(null, view.state.schema.text(table))
+            view.dispatch(view.state.tr.replaceSelectionWith(tableNode).scrollIntoView())
+            return true
+          }
+        }
         view.dispatch(view.state.tr.insertText(text, from, to))
         return true
       }
@@ -1109,9 +1119,11 @@ watch([isLoaded, isSignedIn, userId], async () => {
           v-if="docFormat === 'markdown'"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
           :disabled="!canCreateDocument"
+          title="New Markdown document"
           @click="createDocument('markdown')"
         >
-          New
+          <UiIcon name="plus" />
+          <span class="sr-only">New Markdown document</span>
         </button>
 
         <button
@@ -1122,7 +1134,8 @@ watch([isLoaded, isSignedIn, userId], async () => {
           title="Create a Typst (.typ) document compiled to PDF on export"
           @click="createDocument('typst')"
         >
-          New Typst
+          <UiIcon name="plus" />
+          <span class="sr-only">New Typst document</span>
         </button>
 
         <button
@@ -1130,9 +1143,11 @@ watch([isLoaded, isSignedIn, userId], async () => {
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:opacity-50 dark:border-neutral-700"
           :disabled="checkpointBusy"
+          title="Create checkpoint"
           @click="saveCheckpoint"
         >
-          Checkpoint
+          <UiIcon name="bookmark" />
+          <span class="sr-only">Create checkpoint</span>
         </button>
 
         <button
@@ -1140,9 +1155,11 @@ watch([isLoaded, isSignedIn, userId], async () => {
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:opacity-50 dark:border-neutral-700"
           :disabled="checkpointBusy"
+          title="Undo last save"
           @click="restorePrevious"
         >
-          Undo save
+          <UiIcon name="undo" />
+          <span class="sr-only">Undo last save</span>
         </button>
 
         <button
@@ -1150,18 +1167,22 @@ watch([isLoaded, isSignedIn, userId], async () => {
           type="button"
           class="rounded-md border border-red-300 px-3 py-1 text-sm text-red-700 disabled:opacity-50 dark:border-red-800 dark:text-red-300"
           :disabled="checkpointBusy"
+          title="Delete document"
           @click="deleteCurrentDocument"
         >
-          Delete
+          <UiIcon name="trash" />
+          <span class="sr-only">Delete document</span>
         </button>
 
         <button
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
           :disabled="!canExportPdf || exportingPdf"
+          title="Export PDF"
           @click="exportPdfForCurrentDoc"
         >
-          {{ exportingPdf ? 'PDF…' : 'PDF' }}
+          <UiIcon name="file" />
+          <span class="sr-only">{{ exportingPdf ? 'Exporting PDF' : 'Export PDF' }}</span>
         </button>
 
         <button
@@ -1171,27 +1192,33 @@ watch([isLoaded, isSignedIn, userId], async () => {
           :class="isShared
             ? 'border-emerald-600 text-emerald-700 dark:border-emerald-500 dark:text-emerald-300'
             : 'border-neutral-300 dark:border-neutral-700'"
+          :title="isShared ? 'Sharing enabled' : 'Share document'"
           @click="shareOpen = !shareOpen"
         >
-          {{ isShared ? 'Shared ✓' : 'Share' }}
+          <UiIcon name="share" />
+          <span class="sr-only">{{ isShared ? 'Shared' : 'Share' }}</span>
         </button>
 
         <button
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
           :disabled="isPublicMode || docFormat === 'typst'"
+          title="Upload Markdown file"
           @click="triggerMarkdownUpload"
         >
-          Upload .md
+          <UiIcon name="upload" />
+          <span class="sr-only">Upload Markdown</span>
         </button>
 
         <button
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
           :disabled="isPublicMode"
+          :title="`Download ${docFormat === 'typst' ? 'Typst' : 'Markdown'} source`"
           @click="downloadSource"
         >
-          {{ docFormat === 'typst' ? 'Download .typ' : 'Download .md' }}
+          <UiIcon name="download" />
+          <span class="sr-only">Download {{ docFormat === 'typst' ? 'Typst' : 'Markdown' }}</span>
         </button>
 
         <button
@@ -1204,7 +1231,8 @@ watch([isLoaded, isSignedIn, userId], async () => {
           :title="showPreview ? 'Hide side-by-side preview pane' : 'Show side-by-side preview pane'"
           @click="togglePreview"
         >
-          {{ showPreview ? 'Preview: On' : 'Preview: Off' }}
+          <UiIcon name="eye" />
+          <span class="sr-only">{{ showPreview ? 'Hide preview' : 'Show preview' }}</span>
         </button>
 
         <input
@@ -1220,13 +1248,13 @@ watch([isLoaded, isSignedIn, userId], async () => {
 
       <div
         v-if="canShare && shareOpen"
-        class="flex flex-col gap-2 rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+        class="flex flex-wrap items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-700 dark:bg-neutral-950"
       >
         <template v-if="isShared">
-          <span class="text-xs text-neutral-500 dark:text-neutral-400">
+          <span class="w-full text-xs text-neutral-500 dark:text-neutral-400">
             Anyone with the link can view the rendered document — it updates automatically when you edit.
           </span>
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="contents">
             <input
               :value="shareUrl"
               type="text"
@@ -1260,7 +1288,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
               {{ shareBusy ? '…' : 'Rotate' }}
             </button>
           </div>
-          <div class="mt-2 flex flex-wrap items-center gap-2 border-t border-neutral-200 pt-2 dark:border-neutral-800">
+          <div class="contents">
             <span class="text-xs text-neutral-500 dark:text-neutral-400">/p/</span>
             <input
               v-model="shareSlug"
@@ -1279,14 +1307,14 @@ watch([isLoaded, isSignedIn, userId], async () => {
           </div>
         </template>
         <template v-else>
-          <span class="text-xs text-neutral-500 dark:text-neutral-400">
+          <span class="w-full text-xs text-neutral-500 dark:text-neutral-400">
             Sharing is off. When enabled, anyone with the link can view the rendered document — it updates automatically when you edit.
           </span>
-          <div class="flex flex-col gap-2">
-            <label class="text-xs text-neutral-500 dark:text-neutral-400">
+          <div class="contents">
+            <label class="w-full text-xs text-neutral-500 dark:text-neutral-400">
               Custom link (optional)
             </label>
-            <div class="flex flex-wrap items-center gap-1">
+            <div class="contents">
               <span class="text-xs text-neutral-400">/p/</span>
               <input
                 v-model="shareSlug"
@@ -1295,16 +1323,14 @@ watch([isLoaded, isSignedIn, userId], async () => {
                 class="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
               >
             </div>
-            <div>
-              <button
+            <button
                 type="button"
                 class="rounded-md border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-neutral-700"
                 :disabled="shareBusy"
                 @click="postShare(true, false, shareSlug)"
               >
                 {{ shareBusy ? '…' : 'Enable share link' }}
-              </button>
-            </div>
+            </button>
           </div>
         </template>
         <span
@@ -1328,8 +1354,10 @@ watch([isLoaded, isSignedIn, userId], async () => {
       >
         {{ typstError }}
       </div>
-      <div v-if="isAuthenticatedMode && currentDocId && checkpoints.length > 0" class="rounded-md border border-neutral-200 bg-neutral-50 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-950">
-        <div class="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-500">Checkpoints</div>
+      <details v-if="isAuthenticatedMode && currentDocId && checkpoints.length > 0" class="rounded-md border border-neutral-200 bg-neutral-50 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-950">
+        <summary class="cursor-pointer list-none text-xs font-medium uppercase tracking-wide text-neutral-500">
+          Checkpoints <span class="normal-case tracking-normal">({{ checkpoints.length }})</span>
+        </summary>
         <div v-for="checkpoint in checkpoints" :key="checkpoint.id" class="flex items-center justify-between gap-2 border-t border-neutral-200 py-1 dark:border-neutral-800">
           <span class="min-w-0 truncate">{{ checkpoint.label || 'Unnamed checkpoint' }}</span>
           <span class="flex shrink-0 gap-1">
@@ -1337,7 +1365,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
             <button type="button" class="rounded border px-2 py-0.5 text-xs text-red-700" :disabled="checkpointBusy" @click="deleteCheckpoint(checkpoint.id)">Delete</button>
           </span>
         </div>
-      </div>
+      </details>
       <div v-if="checkpointMessage" class="text-xs text-red-600 dark:text-red-400">{{ checkpointMessage }}</div>
     </header>
 
