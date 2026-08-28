@@ -7,7 +7,8 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test": "vitest run"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.1",
@@ -29,6 +30,7 @@
     "drizzle-orm": "^0.45.2",
     "gemoji": "^8.1.0",
     "html2pdf.js": "^0.14.0",
+    "marked": "^18.0.11",
     "mermaid": "^11.17.0",
     "nuxt": "^4.4.5",
     "shiki": "^3.23.0",
@@ -39,6 +41,7 @@
   "devDependencies": {
     "drizzle-kit": "^0.31.10",
     "typescript": "^5.9.3",
+    "vitest": "^3.2.7",
     "vue-tsc": "^3.3.11"
   }
 }
