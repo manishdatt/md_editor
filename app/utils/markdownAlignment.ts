@@ -26,6 +26,7 @@ const LEGACY_MARKER_RE = /^<!--\s*align:\s*(left|center|right)\s*-->$/
 const EMPTY_PARAGRAPH_MARKER_RE = /^\s*(?:&nbsp;|\u00a0)\s*$/i
 const MARKDOWN_SPACER_RE = /^\s*<div\s+class=["']markdown-spacer["'](?:\s+[^>]*)?>\s*<\/div>\s*$/i
 const MARKDOWN_SPACER = '<div class="markdown-spacer"></div>'
+const MARKDOWN_HEADING_RE = /^\s{0,3}#{1,6}(?:\s|$)/
 
 export interface SemanticEditorBlock {
   node: PMNode
@@ -145,6 +146,14 @@ export function normalizeMarkdownForStorage(markdown: string): string {
     if (MARKDOWN_SPACER_RE.test(line)) {
       emitSpacer()
       continue
+    }
+
+    // TipTap can round-trip a single visible blank paragraph as a longer
+    // ordinary blank-line run, especially around atom blocks such as SVG and
+    // HTML. Keep one authored blank before a heading at the storage boundary;
+    // intentional extra vertical space must use the explicit spacer node.
+    if (MARKDOWN_HEADING_RE.test(line) && blankCount > 1) {
+      blankCount = 1
     }
 
     flush()
