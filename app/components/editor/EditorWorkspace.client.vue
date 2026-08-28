@@ -1077,9 +1077,11 @@ watch([isLoaded, isSignedIn, userId], async () => {
             role="radio"
             :aria-checked="docFormat === 'typst'"
             class="rounded px-3 py-1 text-sm transition-colors"
-            :class="docFormat === 'typst'
+          :class="docFormat === 'typst'
               ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
               : 'text-neutral-600 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800'"
+            :disabled="!isAuthenticatedMode"
+            :title="isAuthenticatedMode ? 'Use Typst format' : 'Sign in to use Typst'"
             @click="setDocumentFormat('typst')"
           >
             Typst
@@ -1092,7 +1094,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
           class="rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
         >
           <option v-for="doc in docs" :key="doc.id" :value="doc.id">
-            {{ doc.title || 'Untitled Document' }}
+            {{ doc.title || 'Untitled Document' }} · {{ doc.format === 'typst' ? 'Typst' : 'MD' }}
           </option>
         </select>
 
@@ -1104,6 +1106,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
 
         <button
           type="button"
+          v-if="docFormat === 'markdown'"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
           :disabled="!canCreateDocument"
           @click="createDocument('markdown')"
@@ -1112,7 +1115,7 @@ watch([isLoaded, isSignedIn, userId], async () => {
         </button>
 
         <button
-          v-if="isAuthenticatedMode"
+          v-if="isAuthenticatedMode && docFormat === 'typst'"
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
           :disabled="!canCreateDocument"
