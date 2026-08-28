@@ -104,7 +104,10 @@ export async function ensureSchema(event?: H3Event) {
             format TEXT NOT NULL DEFAULT 'markdown',
             share_token TEXT,
             is_shared INTEGER NOT NULL DEFAULT 0,
-            updated_at INTEGER NOT NULL
+            updated_at INTEGER NOT NULL,
+            checkpoints TEXT NOT NULL DEFAULT '[]',
+            previous_snapshot TEXT,
+            revision INTEGER NOT NULL DEFAULT 0
           )`,
           // Uniqueness for share tokens (NULLs are distinct in SQLite, so
           // unshared rows never collide). Idempotent for fresh and existing DBs.
@@ -185,6 +188,20 @@ export async function ensureSchema(event?: H3Event) {
         )).catch((err) => {
           failures.push(`ALTER documents is_shared -> ${err?.message || String(err)}`)
         })
+      }
+
+      const currentDocumentColumns = await database.all(sql.raw(`PRAGMA table_info(documents)`)).catch(() => [])
+      const documentColumnMigrations = [
+        ['checkpoints', `ALTER TABLE documents ADD COLUMN checkpoints TEXT NOT NULL DEFAULT '[]'`],
+        ['previous_snapshot', `ALTER TABLE documents ADD COLUMN previous_snapshot TEXT`],
+        ['revision', `ALTER TABLE documents ADD COLUMN revision INTEGER NOT NULL DEFAULT 0`]
+      ] as const
+      for (const [name, statement] of documentColumnMigrations) {
+        if (!(currentDocumentColumns as any[]).some((column) => column?.name === name)) {
+          await database.run(sql.raw(statement)).catch((err) => {
+            failures.push(`${statement} -> ${err?.message || String(err)}`)
+          })
+        }
       }
 
       if (failures.length > 0) {

@@ -26,6 +26,9 @@ type DocItem = {
   shareToken?: string | null
   isShared?: boolean
   updated_at: number
+  revision?: number
+  checkpoints?: Array<{ id: string, label: string, title: string, format: DocumentFormat, savedAt: number, size: number }>
+  hasPrevious?: boolean
 }
 
 type UserTier = 'free' | 'starter' | 'pro'
@@ -52,6 +55,11 @@ const userTier = ref<UserTier>('free')
 const docFormat = ref<DocumentFormat>('markdown')
 const exportingPdf = ref(false)
 const typstError = ref('')
+const revision = ref(0)
+const checkpoints = ref<NonNullable<DocItem['checkpoints']>>([])
+const hasPrevious = ref(false)
+const checkpointBusy = ref(false)
+const checkpointMessage = ref('')
 
 const saveTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const pendingMarkdown = ref<string | null>(null)
@@ -61,6 +69,7 @@ const showPreview = ref(true)
 // persist content — the corruption loop that degraded documents over reloads.
 const isApplyingContent = ref(false)
 let activeSave: Promise<void> | null = null
+let saveGeneration = 0
 let activeModeKey = ''
 let onThemeChanged: (() => void) | null = null
 let previewRevision = 0
@@ -144,6 +153,9 @@ async function loadDocument(id: string) {
   currentDocId.value = response.document.id
   title.value = response.document.title
   docFormat.value = response.document.format === 'typst' ? 'typst' : 'markdown'
+  revision.value = Number(response.document.revision ?? 0)
+  checkpoints.value = response.document.checkpoints || []
+  hasPrevious.value = response.document.hasPrevious === true
   typstError.value = ''
 
   // Alignments live in one trailing marker line; strip it for the editor and
@@ -187,17 +199,23 @@ async function saveDocument(content: string) {
 
   saveState.value = 'saving'
 
-  await $fetch('/api/documents/' + currentDocId.value, {
+  const generation = saveGeneration
+  const response = await $fetch<{ document?: { revision?: number, hasPrevious?: boolean, checkpoints?: NonNullable<DocItem['checkpoints']> } }>('/api/documents/' + currentDocId.value, {
     method: 'PUT',
     body: {
       title: title.value,
       content,
-      format: docFormat.value
+      format: docFormat.value,
+      baseRevision: revision.value
     }
   })
 
+  if (response.document?.revision !== undefined) revision.value = response.document.revision
+  if (response.document?.hasPrevious !== undefined) hasPrevious.value = response.document.hasPrevious
+  if (response.document?.checkpoints) checkpoints.value = response.document.checkpoints
+
   saveState.value = 'saved'
-  await listDocuments()
+  if (generation === saveGeneration) await listDocuments()
 }
 
 async function setDocumentFormat(format: DocumentFormat) {
@@ -388,6 +406,9 @@ async function createLocalDocument() {
   currentDocId.value = ''
   title.value = 'Untitled Document'
   markdown.value = ''
+  revision.value = 0
+  checkpoints.value = []
+  hasPrevious.value = false
   docFormat.value = 'markdown'
   typstError.value = ''
   saveState.value = 'idle'
@@ -549,6 +570,89 @@ function insertHtmlBlock() {
       html: '<div style="display:flex;gap:8px">\n  <div style="flex:1;padding:8px;background:#e5e7eb;border-radius:6px">Column A</div>\n  <div style="flex:1;padding:8px;background:#e5e7eb;border-radius:6px">Column B</div>\n</div>'
     }
   }).run()
+}
+
+async function prepareDocumentMutation() {
+  if (activeSave) {
+    await activeSave
+  }
+  saveGeneration += 1
+  if (saveTimer.value) {
+    clearTimeout(saveTimer.value)
+    saveTimer.value = null
+  }
+  pendingMarkdown.value = null
+}
+
+async function saveCheckpoint() {
+  if (!isAuthenticatedMode.value || !currentDocId.value || checkpointBusy.value) return
+  const label = window.prompt('Checkpoint label (optional)', '')
+  if (label === null) return
+  checkpointBusy.value = true
+  checkpointMessage.value = ''
+  try {
+    const result = await $fetch<{ checkpoints: NonNullable<DocItem['checkpoints']>, revision: number }>(`/api/documents/${currentDocId.value}/checkpoints`, {
+      method: 'POST', body: { label, baseRevision: revision.value, clientRequestId: crypto.randomUUID() }
+    })
+    checkpoints.value = result.checkpoints
+    revision.value = result.revision
+  } catch (error: any) {
+    checkpointMessage.value = error?.data?.statusMessage || error?.message || 'Checkpoint failed'
+  } finally { checkpointBusy.value = false }
+}
+
+async function restoreCheckpoint(id: string) {
+  if (!currentDocId.value || checkpointBusy.value) return
+  checkpointBusy.value = true
+  checkpointMessage.value = ''
+  try {
+    await prepareDocumentMutation()
+    await $fetch(`/api/documents/${currentDocId.value}/checkpoints/${id}/restore`, { method: 'POST', body: { baseRevision: revision.value } })
+    await loadDocument(currentDocId.value)
+  } catch (error: any) {
+    checkpointMessage.value = error?.data?.statusMessage || error?.message || 'Restore failed'
+  } finally { checkpointBusy.value = false }
+}
+
+async function restorePrevious() {
+  if (!currentDocId.value || !hasPrevious.value || checkpointBusy.value) return
+  checkpointBusy.value = true
+  checkpointMessage.value = ''
+  try {
+    await prepareDocumentMutation()
+    await $fetch(`/api/documents/${currentDocId.value}/restore-previous`, { method: 'POST', body: { baseRevision: revision.value } })
+    await loadDocument(currentDocId.value)
+  } catch (error: any) {
+    checkpointMessage.value = error?.data?.statusMessage || error?.message || 'Undo failed'
+  } finally { checkpointBusy.value = false }
+}
+
+async function deleteCheckpoint(id: string) {
+  if (!currentDocId.value || checkpointBusy.value) return
+  checkpointBusy.value = true
+  try {
+    const result = await $fetch<{ checkpoints: NonNullable<DocItem['checkpoints']>, revision: number }>(`/api/documents/${currentDocId.value}/checkpoints/${id}`, { method: 'DELETE', body: { baseRevision: revision.value } })
+    checkpoints.value = result.checkpoints
+    revision.value = result.revision
+  } catch (error: any) { checkpointMessage.value = error?.data?.statusMessage || error?.message || 'Delete checkpoint failed' }
+  finally { checkpointBusy.value = false }
+}
+
+async function deleteCurrentDocument() {
+  if (!isAuthenticatedMode.value || !currentDocId.value || checkpointBusy.value) return
+  if (!window.confirm('Delete this document permanently?')) return
+  checkpointBusy.value = true
+  try {
+    await prepareDocumentMutation()
+    await $fetch(`/api/documents/${currentDocId.value}`, { method: 'DELETE' })
+    currentDocId.value = ''
+    checkpoints.value = []
+    hasPrevious.value = false
+    await listDocuments()
+    if (docs.value.length > 0 && docs.value[0]) await loadDocument(docs.value[0].id)
+    else await createLocalDocument()
+  } catch (error: any) { checkpointMessage.value = error?.data?.statusMessage || error?.message || 'Delete failed' }
+  finally { checkpointBusy.value = false }
 }
 
 function insertParagraphBelowCurrentBlock() {
@@ -1019,6 +1123,36 @@ watch([isLoaded, isSignedIn, userId], async () => {
         </button>
 
         <button
+          v-if="isAuthenticatedMode && currentDocId"
+          type="button"
+          class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:opacity-50 dark:border-neutral-700"
+          :disabled="checkpointBusy"
+          @click="saveCheckpoint"
+        >
+          Checkpoint
+        </button>
+
+        <button
+          v-if="isAuthenticatedMode && currentDocId && hasPrevious"
+          type="button"
+          class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:opacity-50 dark:border-neutral-700"
+          :disabled="checkpointBusy"
+          @click="restorePrevious"
+        >
+          Undo save
+        </button>
+
+        <button
+          v-if="isAuthenticatedMode && currentDocId"
+          type="button"
+          class="rounded-md border border-red-300 px-3 py-1 text-sm text-red-700 disabled:opacity-50 dark:border-red-800 dark:text-red-300"
+          :disabled="checkpointBusy"
+          @click="deleteCurrentDocument"
+        >
+          Delete
+        </button>
+
+        <button
           type="button"
           class="rounded-md border border-neutral-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
           :disabled="!canExportPdf || exportingPdf"
@@ -1191,6 +1325,17 @@ watch([isLoaded, isSignedIn, userId], async () => {
       >
         {{ typstError }}
       </div>
+      <div v-if="isAuthenticatedMode && currentDocId && checkpoints.length > 0" class="rounded-md border border-neutral-200 bg-neutral-50 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-950">
+        <div class="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-500">Checkpoints</div>
+        <div v-for="checkpoint in checkpoints" :key="checkpoint.id" class="flex items-center justify-between gap-2 border-t border-neutral-200 py-1 dark:border-neutral-800">
+          <span class="min-w-0 truncate">{{ checkpoint.label || 'Unnamed checkpoint' }}</span>
+          <span class="flex shrink-0 gap-1">
+            <button type="button" class="rounded border px-2 py-0.5 text-xs" :disabled="checkpointBusy" @click="restoreCheckpoint(checkpoint.id)">Restore</button>
+            <button type="button" class="rounded border px-2 py-0.5 text-xs text-red-700" :disabled="checkpointBusy" @click="deleteCheckpoint(checkpoint.id)">Delete</button>
+          </span>
+        </div>
+      </div>
+      <div v-if="checkpointMessage" class="text-xs text-red-600 dark:text-red-400">{{ checkpointMessage }}</div>
     </header>
 
     <div

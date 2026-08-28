@@ -69,5 +69,8 @@ export const documents = sqliteTable('documents', {
   // ensureSchema (SQLite allows multiple NULLs, so unshared rows never collide)
   shareToken: text('share_token'),
   isShared: integer('is_shared', { mode: 'boolean' }).notNull().default(false),
-  updatedAt: integer('updated_at', { mode: 'number' }).notNull()
+  updatedAt: integer('updated_at', { mode: 'number' }).notNull(),
+  checkpoints: text('checkpoints').notNull().default('[]'),
+  previousSnapshot: text('previous_snapshot'),
+  revision: integer('revision', { mode: 'number' }).notNull().default(0)
 })

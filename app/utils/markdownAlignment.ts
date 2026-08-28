@@ -75,6 +75,7 @@ export function normalizeMarkdownForStorage(markdown: string): string {
   const out: string[] = []
   let inFence = false
   let blankCount = 0
+  let spacerSeparatorPending = false
 
   // Flush accumulated blank lines into `out`.
   const flush = () => {
@@ -104,6 +105,10 @@ export function normalizeMarkdownForStorage(markdown: string): string {
     // Always emit a blank after the spacer so the next content line starts a
     // new block rather than continuing the spacer's HTML context.
     out.push('')
+    // That emitted blank is the structural separator. If the source also has
+    // one blank immediately after the spacer, consume it rather than creating
+    // a second separator during normalization.
+    spacerSeparatorPending = true
   }
 
   for (const line of lines) {
@@ -120,9 +125,15 @@ export function normalizeMarkdownForStorage(markdown: string): string {
     }
 
     if (line.trim() === '') {
+      if (spacerSeparatorPending) {
+        spacerSeparatorPending = false
+        continue
+      }
       blankCount += 1
       continue
     }
+
+    spacerSeparatorPending = false
 
     // Both the legacy &nbsp; form (from old TipTap saves) and the canonical
     // markdown-spacer form are converted to a properly-padded spacer div.
