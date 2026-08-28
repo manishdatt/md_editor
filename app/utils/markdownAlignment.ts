@@ -75,6 +75,7 @@ export function normalizeMarkdownForStorage(markdown: string): string {
   const out: string[] = []
   let inFence = false
   let blankCount = 0
+  let spacerSeparatorPending = false
 
   // Flush accumulated blank lines into `out`.
   const flush = () => {
@@ -104,6 +105,10 @@ export function normalizeMarkdownForStorage(markdown: string): string {
     // Always emit a blank after the spacer so the next content line starts a
     // new block rather than continuing the spacer's HTML context.
     out.push('')
+    // The next source blank, when present, may be the structural separator
+    // already represented by the blank above. Consume exactly one such blank
+    // instead of turning it into an additional persisted blank line.
+    spacerSeparatorPending = true
   }
 
   for (const line of lines) {
@@ -120,9 +125,15 @@ export function normalizeMarkdownForStorage(markdown: string): string {
     }
 
     if (line.trim() === '') {
+      if (spacerSeparatorPending) {
+        spacerSeparatorPending = false
+        continue
+      }
       blankCount += 1
       continue
     }
+
+    spacerSeparatorPending = false
 
     // Both the legacy &nbsp; form (from old TipTap saves) and the canonical
     // markdown-spacer form are converted to a properly-padded spacer div.
@@ -162,10 +173,10 @@ export function normalizeMarkdownForStorage(markdown: string): string {
 // so it is always safe to call. Fences are skipped and loose-list separators
 // (blank line between two list items) are left alone.
 export function expandBlankRunsForParse(markdown: string): string {
-  // Pass 1: Convert markdown-spacer divs to &nbsp; markers, consuming the
-  // surrounding blank lines that normalizeMarkdownForStorage emits around each
-  // spacer. Without consuming those blanks the blank-run counter in Pass 2
-  // would treat them as additional blank paragraphs and insert extra empties.
+  // Pass 1: Preserve markdown-spacer divs as explicit spacer nodes, consuming
+  // the surrounding structural blank lines that normalization emits. Turning
+  // a spacer into &nbsp; here makes TipTap materialize it as an empty paragraph
+  // and can expose the entity at the editor boundary.
   const sourceLines = markdown.split('\n')
   const lines: string[] = []
   let sourceInFence = false
@@ -184,7 +195,7 @@ export function expandBlankRunsForParse(markdown: string): string {
       if (lastLine !== undefined && lastLine.trim() === '') {
         lines.pop()
       }
-      lines.push('&nbsp;')
+      lines.push(MARKDOWN_SPACER)
       // Skip the blank line that normalizeMarkdownForStorage emitted AFTER.
       const nextLine = sourceLines[si + 1]
       if (nextLine !== undefined && nextLine.trim() === '') {

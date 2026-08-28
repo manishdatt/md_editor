@@ -80,6 +80,30 @@ describe('markdown alignment and spacing boundaries', () => {
     expect(normalizeMarkdownForStorage(normalized)).toBe(normalized)
   })
 
+  it('does not duplicate the separator before a trailing alignment marker', () => {
+    const source = [
+      '## Test',
+      '',
+      '',
+      'hi',
+      '',
+      '<div class="markdown-spacer"></div>',
+      '',
+      '<!-- alignment: {"0":"center"} -->'
+    ].join('\n')
+
+    expect(normalizeMarkdownForStorage(source)).toBe([
+      '## Test',
+      '',
+      '',
+      'hi',
+      '',
+      '<div class="markdown-spacer"></div>',
+      '',
+      '<!-- alignment: {"0":"center"} -->'
+    ].join('\n'))
+  })
+
   it('does not expand the structural separator after a closed SVG or HTML fence', () => {
     const svg = '```svg\n<svg />\n```\n\n## Heading'
     const html = '```{=html}\n<div />\n```\n\n## Heading'

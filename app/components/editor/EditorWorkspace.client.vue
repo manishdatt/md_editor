@@ -10,6 +10,7 @@ import { MarkdownTableBlock } from '~/extensions/markdownTableBlock'
 import { MermaidBlock } from '~/extensions/mermaidBlock'
 import { SvgBlock } from '~/extensions/svgBlock'
 import { HtmlBlock } from '~/extensions/htmlBlock'
+import { MarkdownSpacer } from '~/extensions/markdownSpacer'
 import { RawHtmlText } from '~/extensions/rawHtmlText'
 import { AiGhostText } from '~/extensions/aiGhostText'
 import { useMarkdownRenderer } from '~/composables/useMarkdownRenderer.client'
@@ -740,6 +741,7 @@ function initializeEditor() {
         }
       }),
       HtmlBlock,
+      MarkdownSpacer,
       SvgBlock,
       MermaidBlock,
       CodeBlockShiki,
