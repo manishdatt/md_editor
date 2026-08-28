@@ -29,6 +29,39 @@ const EMPTY_PARAGRAPH_MARKER_RE = /^\s*(?:&nbsp;|\u00a0)\s*$/i
 const MARKDOWN_SPACER_RE = /^\s*<div\s+class=["']markdown-spacer["'](?:\s+[^>]*)?>\s*<\/div>\s*$/i
 const MARKDOWN_SPACER = '<div class="markdown-spacer"></div>'
 
+export interface SemanticEditorBlock {
+  node: PMNode
+  childIndex: number
+  sourceIndex: number
+}
+
+// TipTap may materialize a structural Markdown separator as an empty
+// paragraph. It is not a source block and must not affect alignment indices.
+// Keep this exact predicate in one place: broadening it would risk consuming
+// intentional spacer/content nodes.
+export function isStructuralEmptyParagraph(node: PMNode): boolean {
+  return node.type.name === 'paragraph' && node.content.size === 0
+}
+
+// Enumerate editor children using the same semantic indexing contract used by
+// the Markdown alignment marker. Non-paragraph nodes—including explicit HTML
+// spacer nodes and SVG/HTML atoms—remain source blocks.
+export function getSemanticEditorBlocks(editor: Pick<Editor, 'state'>): SemanticEditorBlock[] {
+  const blocks: SemanticEditorBlock[] = []
+  let sourceIndex = 0
+
+  editor.state.doc.forEach((node: PMNode, _offset: number, childIndex: number) => {
+    if (isStructuralEmptyParagraph(node)) {
+      return
+    }
+
+    blocks.push({ node, childIndex, sourceIndex })
+    sourceIndex += 1
+  })
+
+  return blocks
+}
+
 /**
  * Normalize content at the persistence boundary.
  *
@@ -246,12 +279,12 @@ export function expandBlankRunsForParse(markdown: string): string {
 export function serializeWithAlignment(editor: Editor): string {
   const base = normalizeMarkdownForStorage(editor.getMarkdown())
   const directives: Record<number, AlignValue> = {}
-  editor.state.doc.forEach((node: PMNode, _offset: number, index: number) => {
+  for (const { node, sourceIndex } of getSemanticEditorBlocks(editor)) {
     const align = (node.attrs?.textAlign as string | undefined) || ''
     if (align && align !== 'left' && (ALIGN_VALUES as readonly string[]).includes(align)) {
-      directives[index] = align as AlignValue
+      directives[sourceIndex] = align as AlignValue
     }
-  })
+  }
 
   const entries = Object.entries(directives)
   if (entries.length === 0) {
@@ -374,13 +407,7 @@ export function applyAlignmentDirectives(editor: Editor, directives: AlignmentDi
   // Ignore them when translating the persisted source index to a ProseMirror
   // child position; otherwise {"1":"center"} can be applied to the block
   // immediately before the intended heading.
-  const sourceChildren: Array<{ node: PMNode, childIndex: number }> = []
-  editor.state.doc.forEach((node: PMNode, _offset: number, childIndex: number) => {
-    const isEmptyParagraph = node.type.name === 'paragraph' && node.content.size === 0
-    if (!isEmptyParagraph) {
-      sourceChildren.push({ node, childIndex })
-    }
-  })
+  const sourceChildren = getSemanticEditorBlocks(editor)
 
   for (const { index, align } of directives) {
     const target = sourceChildren[index]
