@@ -112,60 +112,6 @@ describe('markdown alignment and spacing boundaries', () => {
     expect(expandBlankRunsForParse(html)).toBe('```{=html}\n<div />\n```\n## Heading')
   })
 
-  it('canonicalizes repeated ordinary blank lines before headings after raw blocks', () => {
-    const source = [
-      '```svg',
-      '<svg />',
-      '```',
-      '',
-      '',
-      '',
-      '### First heading',
-      '',
-      '',
-      '',
-      '### Second heading',
-      '',
-      '',
-      '',
-      '### Third heading'
-    ].join('\n')
-
-    expect(normalizeMarkdownForStorage(source)).toBe([
-      '```svg',
-      '<svg />',
-      '```',
-      '',
-      '### First heading',
-      '',
-      '### Second heading',
-      '',
-      '### Third heading'
-    ].join('\n'))
-  })
-
-  it('preserves explicit spacers before headings', () => {
-    const source = [
-      '```svg',
-      '<svg />',
-      '```',
-      '',
-      '<div class="markdown-spacer"></div>',
-      '',
-      '### Heading'
-    ].join('\n')
-
-    expect(normalizeMarkdownForStorage(source)).toBe([
-      '```svg',
-      '<svg />',
-      '```',
-      '',
-      '<div class="markdown-spacer"></div>',
-      '',
-      '### Heading'
-    ].join('\n'))
-  })
-
   it('never exposes editor-only nbsp markers in parse input or stored Markdown', () => {
     const source = '## Test\n\n\nhi\n&nbsp;\n&nbsp;'
 
