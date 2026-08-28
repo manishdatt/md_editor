@@ -8,6 +8,10 @@ import { authClient } from '~/lib/auth-client'
 const sessionState = authClient.useSession()
 const route = useRoute()
 const onSignInPage = computed(() => route.path === '/signin')
+const planLabel = computed(() => {
+  const tier = String((sessionState.value?.data?.user as any)?.tier || 'free').toLowerCase()
+  return `${tier === 'starter' ? 'Starter' : tier === 'pro' ? 'Pro' : 'Free'} plan`
+})
 
 function signOut() {
   authClient.signOut()
@@ -27,7 +31,12 @@ function signOut() {
     </template>
 
     <template v-else>
-      <span class="text-sm text-neutral-600 dark:text-neutral-300">
+      <span
+        class="text-sm text-neutral-600 outline-none underline-offset-2 hover:underline focus-visible:underline dark:text-neutral-300"
+        tabindex="0"
+        :title="planLabel"
+        :aria-label="`${sessionState.data.user.name || sessionState.data.user.email}, ${planLabel}`"
+      >
         {{ sessionState.data.user.name || sessionState.data.user.email }}
       </span>
       <button

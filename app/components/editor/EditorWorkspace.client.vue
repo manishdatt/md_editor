@@ -119,6 +119,10 @@ const canCreateDocument = computed(() => {
   }
   return true
 })
+const filteredDocuments = computed(() => docs.value.filter((doc) => {
+  const format = doc.format === 'typst' ? 'typst' : 'markdown'
+  return format === docFormat.value
+}))
 
 // Only saved, authenticated markdown documents can be shared (anonymous
 // public-mode docs are never persisted server-side)
@@ -224,19 +228,57 @@ async function setDocumentFormat(format: DocumentFormat) {
     return
   }
 
+  // Finish any pending save for the current document before changing the
+  // visible collection. The format switch itself must never save or mutate
+  // the current document's format.
+  if (activeSave) {
+    await activeSave
+  }
+  await flushSaveQueue()
+
   docFormat.value = format
   typstError.value = ''
 
-  // Keep the current source intact while changing the editor surface. This
-  // lets users move between the two views without losing work; the selected
-  // format is saved with authenticated documents along with the source.
-  if (isAuthenticatedMode.value && currentDocId.value) {
-    scheduleSave(markdown.value)
+  const nextDocument = docs.value.find((doc) => {
+    const documentFormat = doc.format === 'typst' ? 'typst' : 'markdown'
+    return documentFormat === format
+  })
+
+  if (nextDocument) {
+    if (currentDocId.value !== nextDocument.id) {
+      currentDocId.value = nextDocument.id
+    } else {
+      await loadDocument(nextDocument.id)
+    }
+    return
+  }
+
+  await clearSelectedDocument(format)
+}
+
+async function clearSelectedDocument(format: DocumentFormat) {
+  currentDocId.value = ''
+  title.value = 'Untitled Document'
+  markdown.value = ''
+  revision.value = 0
+  checkpoints.value = []
+  hasPrevious.value = false
+  resetShareState()
+  checkpointMessage.value = ''
+
+  if (editor.value && format === 'markdown') {
+    isApplyingContent.value = true
+    try {
+      editor.value.commands.setContent('', { contentType: 'markdown' })
+    } finally {
+      isApplyingContent.value = false
+    }
   }
 
   if (format === 'markdown') {
-    await nextTick()
     await refreshPreview()
+  } else {
+    previewHtml.value = ''
   }
 }
 
@@ -650,8 +692,9 @@ async function deleteCurrentDocument() {
     checkpoints.value = []
     hasPrevious.value = false
     await listDocuments()
-    if (docs.value.length > 0 && docs.value[0]) await loadDocument(docs.value[0].id)
-    else await createLocalDocument()
+    const nextDocument = filteredDocuments.value[0]
+    if (nextDocument) await loadDocument(nextDocument.id)
+    else await clearSelectedDocument(docFormat.value)
   } catch (error: any) { checkpointMessage.value = error?.data?.statusMessage || error?.message || 'Delete failed' }
   finally { checkpointBusy.value = false }
 }
@@ -954,7 +997,9 @@ async function initializeAuthenticatedMode() {
     return
   }
 
-  const firstDoc = docs.value[0]
+  // Start in the Markdown collection when one exists; otherwise use the
+  // first available document and let loadDocument select its stored format.
+  const firstDoc = docs.value.find((doc) => doc.format !== 'typst') || docs.value[0]
   if (firstDoc) {
     await loadDocument(firstDoc.id)
   }
@@ -1047,14 +1092,6 @@ watch([isLoaded, isSignedIn, userId], async () => {
       <div class="flex items-start justify-between gap-2">
         <div class="flex flex-wrap items-center gap-2">
           <span
-            v-if="!isPublicMode"
-            class="rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs font-medium dark:border-neutral-700 dark:bg-neutral-950"
-          >
-            <template v-if="mode === 'free'">Free</template>
-            <template v-else-if="mode === 'starter'">Starter</template>
-            <template v-else>Pro</template>
-          </span>
-          <span
             v-if="isPublicMode"
             class="text-xs text-amber-700 dark:text-amber-300"
           >
@@ -1103,7 +1140,10 @@ watch([isLoaded, isSignedIn, userId], async () => {
           v-model="currentDocId"
           class="rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950"
         >
-          <option v-for="doc in docs" :key="doc.id" :value="doc.id">
+          <option v-if="filteredDocuments.length === 0" disabled value="">
+            No {{ docFormat === 'typst' ? 'Typst' : 'Markdown' }} documents
+          </option>
+          <option v-for="doc in filteredDocuments" :key="doc.id" :value="doc.id">
             {{ doc.title || 'Untitled Document' }} · {{ doc.format === 'typst' ? 'Typst' : 'MD' }}
           </option>
         </select>

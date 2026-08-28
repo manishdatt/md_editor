@@ -35,8 +35,14 @@ onMounted(() => {
   <div class="min-h-screen bg-neutral-100 px-3 py-6 text-neutral-900 sm:px-6 dark:bg-neutral-950 dark:text-neutral-100">
     <main class="mx-auto w-full max-w-3xl">
       <div class="mb-4 flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
-        <img src="/logo_bioinfoguru.svg" alt="shbd" class="h-6 w-6">
-        <span class="text-xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100" style="font-family: 'Laila', ui-sans-serif, system-ui, sans-serif">शब्द</span>
+        <NuxtLink
+          to="/"
+          class="flex items-center gap-2 rounded-sm transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500"
+          aria-label="Go to shbd home"
+        >
+          <img src="/logo_bioinfoguru.svg" alt="" class="h-6 w-6">
+          <span class="text-xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100" style="font-family: 'Laila', ui-sans-serif, system-ui, sans-serif">शब्द</span>
+        </NuxtLink>
         <span class="text-xs">· shared document</span>
       </div>
 
