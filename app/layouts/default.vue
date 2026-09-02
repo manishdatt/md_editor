@@ -96,7 +96,7 @@ onMounted(() => {
 
     <footer class="border-t border-neutral-300 dark:border-neutral-700">
       <div class="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-1 px-3 py-4 text-xs text-neutral-500 sm:flex-row sm:px-6 dark:text-neutral-400">
-        <span>&copy; {{ new Date().getFullYear() }} <span style="font-family: 'Geo', sans-serif; color: #9c51e0; font-size: 1.2em;">bioinfo.guru</span></span>
+        <span>&copy; {{ new Date().getFullYear() }} <span style="font-family: 'Geo', sans-serif; color: #9c51e0; font-size: 1.3em;">bioinfo.guru</span></span>
         <div class="flex items-center gap-4">
           <a href="/privacy.html" class="hover:underline">Privacy Policy</a>
           <a href="/terms.html" class="hover:underline">Terms of Service</a>
