@@ -1,6 +1,6 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import { documents, user } from '~~/server/db/schema'
-import { useDatabase } from '~~/server/utils/database'
+import { useDatabase, withTimeout } from '~~/server/utils/database'
 
 // Unauthenticated public read for shared documents. Deliberately returns a
 // minimal payload: never ownerId, email, or any account information.
@@ -17,18 +17,28 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = await useDatabase(event)
-  const rows = await db
-    .select({
-      title: documents.title,
-      content: documents.content,
-      updated_at: documents.updatedAt
-    })
-    .from(documents)
-    .innerJoin(user, eq(user.id, documents.ownerId))
-    // Documents owned by admin-disabled accounts are hidden; the 404 below is
-    // indistinguishable from an unknown or revoked token.
-    .where(and(eq(documents.shareToken, token), eq(documents.isShared, true), isNull(user.disabledAt)))
-    .limit(1)
+  let rows
+  try {
+    rows = await withTimeout(
+      db
+        .select({
+          title: documents.title,
+          content: documents.content,
+          updated_at: documents.updatedAt
+        })
+        .from(documents)
+        .innerJoin(user, eq(user.id, documents.ownerId))
+        // Documents owned by admin-disabled accounts are hidden; the 404 below is
+        // indistinguishable from an unknown or revoked token.
+        .where(and(eq(documents.shareToken, token), eq(documents.isShared, true), isNull(user.disabledAt)))
+        .limit(1),
+      10000,
+      'public-doc:select'
+    )
+  } catch (err: any) {
+    console.error('[public-doc] query failed', { token: String(token).slice(0, 12), message: err?.message || String(err) })
+    throw createError({ statusCode: 503, statusMessage: err?.message || 'Database temporarily unavailable' })
+  }
 
   const doc = rows[0]
 
